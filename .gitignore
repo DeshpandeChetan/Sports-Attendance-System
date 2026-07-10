@@ -5,6 +5,3 @@ db.sqlite3
 client_secret.local.json
 client_secret.json
 .env
-
-# Replace the placeholder locally with real Google credentials.
-# Do not commit real OAuth secrets.
