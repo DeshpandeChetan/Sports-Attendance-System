@@ -27,6 +27,10 @@ class UserProfile(TimeStampedModel):
     department = models.CharField(max_length=120, blank=True)
     class_name = models.CharField(max_length=120, blank=True)
     phone = models.CharField(max_length=20, blank=True)
+    dob = models.DateField(null=True, blank=True)
+    address = models.TextField(blank=True)
+    register_no = models.CharField(max_length=60, blank=True)
+    gender = models.CharField(max_length=30, blank=True)
 
     def __str__(self):
         return f"{self.user.get_full_name() or self.user.username} ({self.get_role_display()})"
@@ -57,6 +61,18 @@ class Sport(TimeStampedModel):
     name = models.CharField(max_length=120, unique=True)
     description = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
+
+    def __str__(self):
+        return self.name
+
+
+class Venue(TimeStampedModel):
+    name = models.CharField(max_length=160, unique=True)
+    location = models.CharField(max_length=180, blank=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["name"]
 
     def __str__(self):
         return self.name
@@ -103,11 +119,16 @@ class Membership(TimeStampedModel):
 
 
 class Session(TimeStampedModel):
+    class ScheduleSlot(models.TextChoices):
+        MORNING = "MORNING", "Morning"
+        EVENING = "EVENING", "Evening"
+
     team = models.ForeignKey(Team, on_delete=models.CASCADE, related_name="sessions")
-    title = models.CharField(max_length=160)
+    title = models.CharField(max_length=160, blank=True)
     start_at = models.DateTimeField()
     end_at = models.DateTimeField()
     venue = models.CharField(max_length=160)
+    schedule_slot = models.CharField(max_length=20, choices=ScheduleSlot.choices, default=ScheduleSlot.MORNING)
     notes = models.TextField(blank=True)
     scheduled_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name="scheduled_sessions")
     attendance_submitted = models.BooleanField(default=False)

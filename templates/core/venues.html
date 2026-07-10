@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}Venues{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><p class="eyebrow">Settings</p><h1>Venues</h1><p class="text-muted mb-0">Create and manage practice venues used while scheduling sessions.</p></div>
+  <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#venueModal" data-mode="create"><i class="bi bi-plus-lg"></i> Add Venue</button>
+</div>
+
+<section class="panel">
+  <div class="table-responsive">
+    <table class="table align-middle data-table">
+      <thead><tr><th>Venue</th><th>Location</th><th>Status</th><th class="text-end">Actions</th></tr></thead>
+      <tbody>
+        {% for venue in venues %}
+          <tr>
+            <td><strong>{{ venue.name }}</strong></td>
+            <td>{{ venue.location|default:"-" }}</td>
+            <td>{% if venue.is_active %}<span class="badge text-bg-success">Active</span>{% else %}<span class="badge text-bg-secondary">Inactive</span>{% endif %}</td>
+            <td class="text-end">
+              <div class="dropdown">
+                <button class="btn btn-sm btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown">Actions</button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                  <li><button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#venueViewModal" data-name="{{ venue.name }}" data-location="{{ venue.location|default:'-' }}" data-status="{{ venue.is_active|yesno:'Active,Inactive' }}"><i class="bi bi-eye"></i> View</button></li>
+                  <li><button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#venueModal" data-mode="edit" data-id="{{ venue.pk }}" data-name="{{ venue.name }}" data-location="{{ venue.location }}" data-active="{{ venue.is_active|yesno:'true,false' }}"><i class="bi bi-pencil"></i> Edit</button></li>
+                  <li><button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#venueConfirmModal" data-action="{% if venue.is_active %}deactivate{% else %}activate{% endif %}" data-id="{{ venue.pk }}" data-title="{% if venue.is_active %}Deactivate{% else %}Activate{% endif %} Venue" data-message="Confirm this venue status change."><i class="bi bi-toggle-off"></i> {% if venue.is_active %}Deactivate{% else %}Activate{% endif %}</button></li>
+                  <li><button class="dropdown-item text-danger" data-bs-toggle="modal" data-bs-target="#venueConfirmModal" data-action="delete" data-id="{{ venue.pk }}" data-title="Delete Venue" data-message="This permanently deletes this venue."><i class="bi bi-trash"></i> Delete</button></li>
+                </ul>
+              </div>
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="4" class="empty-state">No venues added yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<div class="modal fade" id="venueModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <form class="modal-content" method="post">
+      {% csrf_token %}
+      <input type="hidden" name="action" data-field="action" value="create">
+      <input type="hidden" name="venue_id" data-field="id">
+      <div class="modal-header"><h5 class="modal-title">Add Venue</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <div class="row g-3">
+          <div class="col-12"><label class="form-label">Venue Name</label><input class="form-control" name="name" data-field="name" required></div>
+          <div class="col-12"><label class="form-label">Location</label><input class="form-control" name="location" data-field="location"></div>
+          <div class="col-12"><div class="form-check"><input class="form-check-input" type="checkbox" name="is_active" data-field="active" checked><label class="form-check-label">Active</label></div></div>
+        </div>
+      </div>
+      <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button><button class="btn btn-primary" type="submit">Save Venue</button></div>
+    </form>
+  </div>
+</div>
+
+<div class="modal fade" id="venueViewModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">Venue Details</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body detail-list">
+        <div><span>Name</span><strong data-field="view-name"></strong></div>
+        <div><span>Location</span><strong data-field="view-location"></strong></div>
+        <div><span>Status</span><strong data-field="view-status"></strong></div>
+      </div>
+      <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="venueConfirmModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <form class="modal-content" method="post">
+      {% csrf_token %}
+      <input type="hidden" name="action" data-field="confirm-action">
+      <input type="hidden" name="venue_id" data-field="confirm-id">
+      <div class="modal-header"><h5 class="modal-title">Confirm</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body"><p class="mb-0" data-field="confirm-message"></p></div>
+      <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button><button class="btn btn-danger" type="submit">Confirm</button></div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.getElementById('venueModal')?.addEventListener('show.bs.modal', event => {
+    const b = event.relatedTarget;
+    const modal = event.currentTarget;
+    const mode = b?.dataset.mode || 'create';
+    modal.querySelector('.modal-title').textContent = mode === 'edit' ? 'Edit Venue' : 'Add Venue';
+    modal.querySelector('[data-field="action"]').value = mode === 'edit' ? 'update' : 'create';
+    ['id','name','location'].forEach(key => {
+      const field = modal.querySelector(`[data-field="${key}"]`);
+      if (field) field.value = b?.dataset[key] || '';
+    });
+    modal.querySelector('[data-field="active"]').checked = b?.dataset.active !== 'false';
+  });
+  document.getElementById('venueViewModal')?.addEventListener('show.bs.modal', event => {
+    const b = event.relatedTarget;
+    const modal = event.currentTarget;
+    ['name','location','status'].forEach(key => {
+      const field = modal.querySelector(`[data-field="view-${key}"]`);
+      if (field) field.textContent = b?.dataset[key] || '-';
+    });
+  });
+  document.getElementById('venueConfirmModal')?.addEventListener('show.bs.modal', event => {
+    const b = event.relatedTarget;
+    const modal = event.currentTarget;
+    modal.querySelector('.modal-title').textContent = b.dataset.title;
+    modal.querySelector('[data-field="confirm-action"]').value = b.dataset.action;
+    modal.querySelector('[data-field="confirm-id"]').value = b.dataset.id;
+    modal.querySelector('[data-field="confirm-message"]').textContent = b.dataset.message;
+  });
+</script>
+{% endblock %}

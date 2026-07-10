@@ -26,14 +26,14 @@
         <div class="d-flex justify-content-between gap-2">
           <div>
             <span class="badge soft-badge">{{ session.team.sport.name }}</span>
-            <span class="text-muted small"> · {{ session.team.get_gender_display }} {{ session.team.name }}</span>
-            <h3>{{ session.title }}</h3>
+            <span class="text-muted small"> - {{ session.team.get_gender_display }} {{ session.team.name }}</span>
+            <h3>{{ session.title|default:"Practice session" }}</h3>
           </div>
           {% if session.attendance_submitted %}<span class="badge text-bg-success">Completed</span>{% else %}<span class="badge text-bg-warning">Pending</span>{% endif %}
         </div>
         <div class="session-meta">
           <span><i class="bi bi-calendar"></i> {{ session.start_at|date:"d M Y" }}</span>
-          <span><i class="bi bi-clock"></i> {{ session.start_at|date:"h:i A" }}</span>
+          <span><i class="bi bi-clock"></i> {{ session.get_schedule_slot_display }}</span>
           <span><i class="bi bi-geo-alt"></i> {{ session.venue }}</span>
           <span><i class="bi bi-person"></i> {{ session.scheduled_by|default:"-" }}</span>
         </div>
@@ -46,8 +46,8 @@
           <div class="dropdown">
             <button class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">More</button>
             <ul class="dropdown-menu dropdown-menu-end">
-              <li><button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#sessionViewModal" data-title="{{ session.title }}" data-team="{{ session.team.sport.name }} - {{ session.team.get_gender_display }} {{ session.team.name }}" data-start="{{ session.start_at|date:'d M Y, h:i A' }}" data-end="{{ session.end_at|date:'d M Y, h:i A' }}" data-venue="{{ session.venue }}" data-scheduled-by="{{ session.scheduled_by|default:'-' }}" data-status="{% if session.attendance_submitted %}Completed{% else %}Pending{% endif %}" data-notes="{{ session.notes|default:'-' }}"><i class="bi bi-eye"></i> View</button></li>
-              {% if can_schedule_any %}<li><button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#sessionModal" data-mode="edit" data-id="{{ session.pk }}" data-team="{{ session.team_id }}" data-title="{{ session.title }}" data-start="{{ session.start_at|date:'Y-m-d\\TH:i' }}" data-end="{{ session.end_at|date:'Y-m-d\\TH:i' }}" data-venue="{{ session.venue }}" data-notes="{{ session.notes }}"><i class="bi bi-pencil"></i> Edit</button></li>{% endif %}
+              <li><button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#sessionViewModal" data-title="{{ session.title|default:'Practice session' }}" data-team="{{ session.team.sport.name }} - {{ session.team.get_gender_display }} {{ session.team.name }}" data-start="{{ session.start_at|date:'d M Y' }}" data-end="{{ session.end_at|date:'d M Y' }}" data-slot="{{ session.get_schedule_slot_display }}" data-venue="{{ session.venue }}" data-scheduled-by="{{ session.scheduled_by|default:'-' }}" data-status="{% if session.attendance_submitted %}Completed{% else %}Pending{% endif %}" data-notes="{{ session.notes|default:'-' }}"><i class="bi bi-eye"></i> View</button></li>
+              {% if can_schedule_any %}<li><button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#sessionModal" data-mode="edit" data-id="{{ session.pk }}" data-team="{{ session.team_id }}" data-title="{{ session.title }}" data-start-date="{{ session.start_at|date:'Y-m-d' }}" data-end-date="{{ session.end_at|date:'Y-m-d' }}" data-slot="{{ session.schedule_slot }}" data-venue="{% if session.venue|slice:':8' == 'Other - ' %}OTHER{% else %}{{ session.venue }}{% endif %}" data-other-venue="{% if session.venue|slice:':8' == 'Other - ' %}{{ session.venue|slice:'8:' }}{% endif %}" data-notes="{{ session.notes }}"><i class="bi bi-pencil"></i> Edit</button></li>{% endif %}
               <li><a class="dropdown-item" href="{% url 'delegate_attendance' session.pk %}"><i class="bi bi-person-check"></i> Assign Session Incharge</a></li>
               <li><button class="dropdown-item text-danger" data-bs-toggle="modal" data-bs-target="#sessionConfirmModal" data-action="delete" data-id="{{ session.pk }}" data-title="Delete Session" data-message="This permanently deletes the practice session and related attendance if the database allows it."><i class="bi bi-trash"></i> Delete</button></li>
             </ul>
@@ -71,10 +71,12 @@
       <div class="modal-body">
         <div class="row g-3">
           <div class="col-md-6"><label class="form-label">Team</label><select class="form-select" name="team" data-field="team" required>{% for team in teams %}<option value="{{ team.pk }}">{{ team.sport.name }} - {{ team.get_gender_display }} {{ team.name }}</option>{% endfor %}</select></div>
-          <div class="col-md-6"><label class="form-label">Title</label><input class="form-control" name="title" data-field="title" required></div>
-          <div class="col-md-6"><label class="form-label">Start</label><input class="form-control" type="datetime-local" name="start_at" data-field="start" required></div>
-          <div class="col-md-6"><label class="form-label">End</label><input class="form-control" type="datetime-local" name="end_at" data-field="end" required></div>
-          <div class="col-12"><label class="form-label">Venue</label><input class="form-control" name="venue" data-field="venue" required></div>
+          <div class="col-md-6"><label class="form-label">Title</label><input class="form-control" name="title" data-field="title" placeholder="Practice session"></div>
+          <div class="col-md-4"><label class="form-label">Start Date</label><input class="form-control" type="date" name="start_date" data-field="start-date" required></div>
+          <div class="col-md-4"><label class="form-label">End Date</label><input class="form-control" type="date" name="end_date" data-field="end-date" required></div>
+          <div class="col-md-4"><label class="form-label">Schedule</label><select class="form-select" name="schedule_slot" data-field="slot"><option value="MORNING">Morning</option><option value="EVENING">Evening</option></select></div>
+          <div class="col-md-6"><label class="form-label">Venue</label><select class="form-select" name="venue_choice" data-field="venue" required>{% for venue in venues %}<option value="{{ venue.name }}">{{ venue.name }}</option>{% endfor %}<option value="OTHER">Other</option></select></div>
+          <div class="col-md-6 d-none" data-other-venue-wrap><label class="form-label">Specific Venue</label><input class="form-control" name="other_venue" data-field="other-venue"></div>
           <div class="col-12"><label class="form-label">Notes</label><textarea class="form-control" name="notes" data-field="notes" rows="3"></textarea></div>
         </div>
       </div>
@@ -93,6 +95,7 @@
         <div><span>Team</span><strong data-field="view-team"></strong></div>
         <div><span>Start</span><strong data-field="view-start"></strong></div>
         <div><span>End</span><strong data-field="view-end"></strong></div>
+        <div><span>Schedule</span><strong data-field="view-slot"></strong></div>
         <div><span>Venue</span><strong data-field="view-venue"></strong></div>
         <div><span>Scheduled By</span><strong data-field="view-scheduled-by"></strong></div>
         <div><span>Status</span><strong data-field="view-status"></strong></div>
@@ -119,16 +122,31 @@
 
 {% block scripts %}
 <script>
+  function toggleOtherVenue(scope) {
+    const venue = scope.querySelector('[data-field="venue"]');
+    const wrap = scope.querySelector('[data-other-venue-wrap]');
+    if (wrap) wrap.classList.toggle('d-none', venue?.value !== 'OTHER');
+  }
   document.getElementById('sessionModal')?.addEventListener('show.bs.modal', event => {
     const b = event.relatedTarget;
     const modal = event.currentTarget;
     const mode = b?.dataset.mode || 'create';
     modal.querySelector('.modal-title').textContent = mode === 'edit' ? 'Edit Practice Session' : 'Schedule Practice';
     modal.querySelector('[data-field="action"]').value = mode === 'edit' ? 'update' : 'create';
-    ['id','team','title','start','end','venue','notes'].forEach(key => {
-      const field = modal.querySelector(`[data-field="${key}"]`);
+    if (mode === 'create') {
+      modal.querySelector('form').reset();
+      modal.querySelector('[data-field="id"]').value = '';
+      toggleOtherVenue(modal);
+      return;
+    }
+    ['id','team','title','startDate','endDate','slot','venue','otherVenue','notes'].forEach(key => {
+      const field = modal.querySelector(`[data-field="${key.replace(/[A-Z]/g, m => '-' + m.toLowerCase())}"]`);
       if (field) field.value = b?.dataset[key] || '';
     });
+    toggleOtherVenue(modal);
+  });
+  document.getElementById('sessionModal')?.querySelector('[data-field="venue"]')?.addEventListener('change', event => {
+    toggleOtherVenue(event.target.closest('#sessionModal'));
   });
   document.getElementById('sessionConfirmModal')?.addEventListener('show.bs.modal', event => {
     const b = event.relatedTarget;
@@ -141,7 +159,7 @@
   document.getElementById('sessionViewModal')?.addEventListener('show.bs.modal', event => {
     const b = event.relatedTarget;
     const modal = event.currentTarget;
-    ['title','team','start','end','venue','scheduledBy','status','notes'].forEach(key => {
+    ['title','team','start','end','slot','venue','scheduledBy','status','notes'].forEach(key => {
       const field = modal.querySelector(`[data-field="view-${key.replace(/[A-Z]/g, m => '-' + m.toLowerCase())}"]`);
       if (field) field.textContent = b?.dataset[key] || '-';
     });

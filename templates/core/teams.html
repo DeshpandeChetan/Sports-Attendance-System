@@ -17,7 +17,13 @@
           <tr>
             <td><strong>{{ team.sport.name }}</strong><div class="text-muted small">{{ team.name }}</div></td>
             <td>{{ team.get_team_type_display }}</td>
-            <td><span class="badge soft-badge">{{ team.get_gender_display }}</span></td>
+            <td>
+              {% if team.gender == 'BOYS' %}
+                <span class="badge gender-badge gender-boys"><i class="bi bi-gender-male"></i> Boys</span>
+              {% else %}
+                <span class="badge gender-badge gender-girls"><i class="bi bi-gender-female"></i> Girls</span>
+              {% endif %}
+            </td>
             <td>{{ team.captain|default:"-" }}</td>
             <td>{{ team.vice_captain|default:"-" }}</td>
             <td>{{ team.coordinator|default:"-" }}</td>

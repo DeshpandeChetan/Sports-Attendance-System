@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}My Profile{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><p class="eyebrow">Account</p><h1>My Profile</h1><p class="text-muted mb-0">View and update your personal profile details.</p></div>
+</div>
+
+<section class="panel">
+  <form method="post" class="row g-3">
+    {% csrf_token %}
+    <div class="col-md-6">{{ form.first_name.label_tag }}{{ form.first_name }}</div>
+    <div class="col-md-6">{{ form.last_name.label_tag }}{{ form.last_name }}</div>
+    <div class="col-md-6">{{ form.email.label_tag }}{{ form.email }}</div>
+    <div class="col-md-6">{{ form.phone.label_tag }}{{ form.phone }}</div>
+    <div class="col-md-4">{{ form.dob.label_tag }}{{ form.dob }}</div>
+    <div class="col-md-4">{{ form.gender.label_tag }}{{ form.gender }}</div>
+    <div class="col-md-4">{{ form.register_no.label_tag }}{{ form.register_no }}</div>
+    <div class="col-md-6">{{ form.department.label_tag }}{{ form.department }}</div>
+    <div class="col-md-6">{{ form.class_name.label_tag }}{{ form.class_name }}</div>
+    <div class="col-12">{{ form.address.label_tag }}{{ form.address }}</div>
+    <div class="col-12 d-flex justify-content-end gap-2">
+      <a class="btn btn-outline-secondary" href="{% url 'dashboard' %}">Cancel</a>
+      <button class="btn btn-primary" type="submit">Save Profile</button>
+    </div>
+  </form>
+</section>
+{% endblock %}

@@ -323,6 +323,54 @@ body {
   color: var(--primary);
 }
 
+.gender-badge {
+  align-items: center;
+  display: inline-flex;
+  gap: .35rem;
+  padding: .45rem .65rem;
+}
+
+.gender-boys {
+  background: rgba(0, 86, 179, .14);
+  color: #003366;
+}
+
+.gender-girls {
+  background: rgba(217, 137, 0, .16);
+  color: #7a4c00;
+}
+
+.login-panel .alert {
+  background: rgba(0, 51, 102, .72);
+  border-color: rgba(255, 255, 255, .32);
+  color: #fff !important;
+}
+
+.login-body .alert,
+.login-body .alert *,
+.login-panel .alert,
+.login-panel .alert * {
+  color: #fff !important;
+}
+
+.login-panel .alert-success,
+.login-panel .alert-warning,
+.login-panel .alert-danger,
+.login-panel .alert-error,
+.login-panel .alert-info {
+  color: #fff !important;
+}
+
+.login-panel .login-note {
+  background: rgba(255, 255, 255, .14);
+  border: 1px solid rgba(255, 255, 255, .28);
+  border-radius: .85rem;
+  color: #fff;
+  display: grid;
+  gap: .25rem;
+  padding: .9rem 1rem;
+}
+
 .data-table {
   min-width: 760px;
 }

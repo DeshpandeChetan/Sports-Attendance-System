@@ -17,8 +17,9 @@
     <a class="{% if request.resolver_match.url_name == 'teams' %}active{% endif %}" href="{% url 'teams' %}"><i class="bi bi-diagram-3"></i><span>Teams</span></a>
     <a class="{% if request.resolver_match.url_name == 'members' %}active{% endif %}" href="{% url 'members' %}"><i class="bi bi-people"></i><span>Add Students</span></a>
     <a class="{% if request.resolver_match.url_name == 'trainers' %}active{% endif %}" href="{% url 'trainers' %}"><i class="bi bi-person-workspace"></i><span>Add Trainer</span></a>
+    <a class="{% if request.resolver_match.url_name == 'venues' %}active{% endif %}" href="{% url 'venues' %}"><i class="bi bi-geo-alt"></i><span>Venues</span></a>
     <a class="{% if request.resolver_match.url_name == 'reports' %}active{% endif %}" href="{% url 'reports' %}"><i class="bi bi-bar-chart"></i><span>Reports</span></a>
-    <a href="/admin/"><i class="bi bi-gear"></i><span>Settings</span></a>
+    <a class="{% if request.resolver_match.url_name == 'settings' %}active{% endif %}" href="{% url 'settings' %}"><i class="bi bi-gear"></i><span>Settings</span></a>
   </div>
 {% elif user.profile.role == 'TRAINER' or user.profile.role == 'COORDINATOR' %}
   <div class="nav-section">

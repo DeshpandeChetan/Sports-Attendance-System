@@ -21,11 +21,13 @@ from .forms import (
     DelegateForm,
     FeedbackForm,
     MembershipForm,
+    ProfileForm,
     ReportFilterForm,
     SessionFeedbackForm,
     SessionForm,
     SportForm,
     TeamForm,
+    VenueForm,
 )
 from .models import (
     AttendanceDelegate,
@@ -38,6 +40,7 @@ from .models import (
     Sport,
     Team,
     UserProfile,
+    Venue,
 )
 from .permissions import ADMIN_ROLES, TRAINER_ROLES, can_manage_team, can_schedule_session, can_take_attendance, is_admin_user, role_for, role_required
 
@@ -144,6 +147,24 @@ def build_student_from_post(request, existing_user=None):
     return user
 
 
+def create_student_from_access_request(access_request):
+    user = User.objects.filter(email__iexact=access_request.email).first()
+    if user is None:
+        user = User(username=access_request.email, email=access_request.email)
+        user.set_unusable_password()
+    user.email = access_request.email
+    user.username = access_request.email
+    if access_request.full_name:
+        parts = access_request.full_name.split(" ", 1)
+        user.first_name = parts[0]
+        user.last_name = parts[1] if len(parts) > 1 else ""
+    user.save()
+    profile, _ = UserProfile.objects.get_or_create(user=user)
+    profile.role = UserProfile.Role.MEMBER
+    profile.save(update_fields=["role", "updated_at"])
+    return user
+
+
 @login_required
 @role_required(*ADMIN_ROLES)
 def sports_list(request):
@@ -175,6 +196,38 @@ def sports_list(request):
 
     sports = Sport.objects.annotate(team_count=Count("teams")).order_by("name")
     return render(request, "core/sports.html", {"sports": sports, "sport_count": sports.count()})
+
+
+@login_required
+@role_required(*ADMIN_ROLES)
+def venues_list(request):
+    if request.method == "POST":
+        action = request.POST.get("action")
+        venue_id = request.POST.get("venue_id")
+        venue = get_object_or_404(Venue, pk=venue_id) if venue_id else None
+        if action in {"create", "update"}:
+            form = VenueForm(request.POST, instance=venue)
+            if form.is_valid():
+                form.save()
+                messages.success(request, "Venue saved successfully.")
+            else:
+                messages.error(request, "Please correct the venue details and try again.")
+        elif action == "deactivate" and venue:
+            venue.is_active = False
+            venue.save(update_fields=["is_active", "updated_at"])
+            messages.success(request, f"{venue.name} deactivated.")
+        elif action == "activate" and venue:
+            venue.is_active = True
+            venue.save(update_fields=["is_active", "updated_at"])
+            messages.success(request, f"{venue.name} activated.")
+        elif action == "delete" and venue:
+            venue_name = venue.name
+            venue.delete()
+            messages.success(request, f"{venue_name} deleted.")
+        return redirect("venues")
+
+    venues = Venue.objects.all().order_by("name")
+    return render(request, "core/venues.html", {"venues": venues})
 
 
 @login_required
@@ -243,49 +296,81 @@ def members_list(request):
         request_id = request.POST.get("request_id")
         access_request = get_object_or_404(LoginAccessRequest, pk=request_id) if request_id else None
         if action in {"approve_request", "reject_request"} and access_request:
-            access_request.status = LoginAccessRequest.Status.APPROVED if action == "approve_request" else LoginAccessRequest.Status.REJECTED
-            access_request.reviewed_by = request.user
-            access_request.reviewed_at = timezone.now()
-            access_request.save(update_fields=["status", "reviewed_by", "reviewed_at", "updated_at"])
-            messages.success(request, f"{access_request.email} {access_request.get_status_display().lower()}.")
+            with transaction.atomic():
+                access_request.status = LoginAccessRequest.Status.APPROVED if action == "approve_request" else LoginAccessRequest.Status.REJECTED
+                access_request.reviewed_by = request.user
+                access_request.reviewed_at = timezone.now()
+                access_request.save(update_fields=["status", "reviewed_by", "reviewed_at", "updated_at"])
+                if action == "approve_request":
+                    create_student_from_access_request(access_request)
+            message = "approved and added to Add Students" if action == "approve_request" else "rejected"
+            messages.success(request, f"{access_request.email} {message}.")
             return redirect("members")
 
         membership_id = request.POST.get("membership_id")
         membership = get_object_or_404(Membership, pk=membership_id) if membership_id else None
+        user_id = request.POST.get("user_id")
+        existing_user = membership.user if membership else User.objects.filter(pk=user_id).first() if user_id else None
         if action in {"create", "update"}:
             try:
                 with transaction.atomic():
-                    student = build_student_from_post(request, existing_user=membership.user if membership else None)
-                    team = get_object_or_404(Team, pk=request.POST.get("team"))
-                    if membership is None:
-                        membership, created = Membership.objects.get_or_create(user=student, team=team)
+                    student = build_student_from_post(request, existing_user=existing_user)
+                    team_id = request.POST.get("team")
+                    if team_id:
+                        team = get_object_or_404(Team, pk=team_id)
+                        if membership is None:
+                            membership, created = Membership.objects.get_or_create(user=student, team=team)
+                        else:
+                            membership.user = student
+                            membership.team = team
+                        membership.is_active = request.POST.get("is_active") == "on"
+                        membership.save()
+                        messages.success(request, "Student saved and assigned successfully.")
                     else:
-                        membership.user = student
-                        membership.team = team
-                    membership.is_active = request.POST.get("is_active") == "on"
-                    membership.save()
-                messages.success(request, "Student saved and assigned successfully.")
+                        messages.success(request, "Student saved. Team can be assigned later.")
             except ValueError as exc:
                 messages.error(request, str(exc))
         elif action == "deactivate" and membership:
             membership.is_active = False
             membership.save(update_fields=["is_active", "updated_at"])
             messages.success(request, "Member deactivated for this team.")
+        elif action == "deactivate" and existing_user:
+            existing_user.is_active = False
+            existing_user.save(update_fields=["is_active"])
+            messages.success(request, "Student deactivated.")
         elif action == "activate" and membership:
             membership.is_active = True
             membership.save(update_fields=["is_active", "updated_at"])
             messages.success(request, "Member activated for this team.")
+        elif action == "activate" and existing_user:
+            existing_user.is_active = True
+            existing_user.save(update_fields=["is_active"])
+            messages.success(request, "Student activated.")
         elif action == "delete" and membership:
             membership.delete()
             messages.success(request, "Member assignment deleted.")
+        elif action == "delete" and existing_user:
+            student_name = existing_user.get_full_name() or existing_user.email or existing_user.username
+            existing_user.is_active = False
+            existing_user.save(update_fields=["is_active"])
+            messages.success(request, f"{student_name} moved to settings restore list.")
         return redirect("members")
 
-    memberships = Membership.objects.select_related("user", "team", "team__sport")
+    memberships = Membership.objects.select_related("user", "user__profile", "team", "team__sport")
     if not is_admin_user(request.user):
         memberships = memberships.filter(team__in=Team.objects.filter(Q(captain=request.user) | Q(vice_captain=request.user) | Q(coordinator=request.user)))
+    assigned_user_ids = set()
+    student_rows = []
+    for membership in memberships:
+        assigned_user_ids.add(membership.user_id)
+        student_rows.append({"membership": membership, "user": membership.user, "team": membership.team, "is_active": membership.is_active})
+    if is_admin_user(request.user):
+        unassigned_students = User.objects.filter(profile__role=UserProfile.Role.MEMBER).exclude(pk__in=assigned_user_ids).select_related("profile").order_by("first_name", "last_name", "email")
+        for student in unassigned_students:
+            student_rows.append({"membership": None, "user": student, "team": None, "is_active": student.is_active})
     teams = Team.objects.filter(is_active=True).select_related("sport").order_by("sport__name", "name")
-    pending_requests = LoginAccessRequest.objects.filter(status=LoginAccessRequest.Status.PENDING)
-    return render(request, "core/members.html", {"memberships": memberships, "teams": teams, "pending_requests": pending_requests})
+    login_requests = LoginAccessRequest.objects.exclude(status=LoginAccessRequest.Status.APPROVED).order_by("status", "-requested_at")
+    return render(request, "core/members.html", {"memberships": memberships, "student_rows": student_rows, "teams": teams, "login_requests": login_requests})
 
 
 @login_required
@@ -336,8 +421,9 @@ def trainers_list(request):
         elif action == "delete" and trainer:
             trainer_name = trainer.get_full_name() or trainer.username
             Team.objects.filter(coordinator=trainer).update(coordinator=None)
-            trainer.delete()
-            messages.success(request, f"{trainer_name} deleted.")
+            trainer.is_active = False
+            trainer.save(update_fields=["is_active"])
+            messages.success(request, f"{trainer_name} moved to settings restore list.")
         return redirect("trainers")
 
     trainers = User.objects.filter(
@@ -346,6 +432,34 @@ def trainers_list(request):
     ).distinct().prefetch_related("coordinated_teams__sport").order_by("first_name", "last_name", "email")
     teams = Team.objects.filter(is_active=True).select_related("sport").order_by("sport__name", "gender", "name")
     return render(request, "core/trainers.html", {"trainers": trainers, "teams": teams})
+
+
+@login_required
+@role_required(*ADMIN_ROLES)
+def settings_page(request):
+    inactive_users = User.objects.filter(is_active=False).select_related("profile").order_by("first_name", "last_name", "email")
+    return render(request, "core/settings.html", {"inactive_users": inactive_users})
+
+
+@login_required
+@role_required(*ADMIN_ROLES)
+def restore_user(request, pk):
+    user = get_object_or_404(User, pk=pk, is_active=False)
+    user.is_active = True
+    user.save(update_fields=["is_active"])
+    messages.success(request, f"{user.get_full_name() or user.email or user.username} restored.")
+    return redirect("settings")
+
+
+@login_required
+def my_profile(request):
+    profile, _ = UserProfile.objects.get_or_create(user=request.user)
+    form = ProfileForm(request.POST or None, instance=profile, user_instance=request.user)
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        messages.success(request, "Profile updated.")
+        return redirect("my_profile")
+    return render(request, "core/my_profile.html", {"form": form})
 
 
 @login_required
@@ -407,7 +521,8 @@ def sessions_list(request):
     if not is_admin_user(request.user):
         team_qs = team_qs.filter(coordinator=request.user)
     can_schedule_any = is_admin_user(request.user) or (role_for(request.user) in TRAINER_ROLES and team_qs.exists())
-    return render(request, "core/sessions.html", {"sessions": sessions, "form": form, "teams": team_qs, "can_schedule_any": can_schedule_any})
+    venues = Venue.objects.filter(is_active=True).order_by("name")
+    return render(request, "core/sessions.html", {"sessions": sessions, "form": form, "teams": team_qs, "venues": venues, "can_schedule_any": can_schedule_any})
 
 
 @login_required
