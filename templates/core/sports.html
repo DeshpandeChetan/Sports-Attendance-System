@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+{% block title %}Sports{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <p class="eyebrow">Administration</p>
+    <h1>Sports</h1>
+    <p class="text-muted mb-0">Create and manage the sports offered by the department.</p>
+  </div>
+  <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#sportModal" data-mode="create">
+    <i class="bi bi-plus-lg"></i> Add Sport
+  </button>
+</div>
+
+<section class="panel">
+  <div class="section-title">
+    <h2>Added Sports</h2>
+    <span class="badge rounded-pill text-bg-light">{{ sport_count }} Sports</span>
+  </div>
+  <div class="table-responsive">
+    <table class="table align-middle data-table">
+      <thead><tr><th>Sport</th><th>Teams</th><th>Status</th><th class="text-end">Actions</th></tr></thead>
+      <tbody>
+        {% for sport in sports %}
+          <tr>
+            <td><strong>{{ sport.name }}</strong><div class="text-muted small">{{ sport.description|default:"No description"|truncatewords:14 }}</div></td>
+            <td>{{ sport.team_count }}</td>
+            <td>{% if sport.is_active %}<span class="badge text-bg-success">Active</span>{% else %}<span class="badge text-bg-secondary">Inactive</span>{% endif %}</td>
+            <td class="text-end">
+              <div class="dropdown">
+                <button class="btn btn-sm btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown">Actions</button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                  <li><button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#sportViewModal" data-name="{{ sport.name }}" data-description="{{ sport.description|default:'No description' }}" data-teams="{{ sport.team_count }}" data-status="{{ sport.is_active|yesno:'Active,Inactive' }}"><i class="bi bi-eye"></i> View</button></li>
+                  <li><button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#sportModal" data-mode="edit" data-id="{{ sport.pk }}" data-name="{{ sport.name }}" data-description="{{ sport.description }}" data-active="{{ sport.is_active|yesno:'true,false' }}"><i class="bi bi-pencil"></i> Edit</button></li>
+                  <li><button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#confirmModal" data-action="{% if sport.is_active %}deactivate{% else %}activate{% endif %}" data-id="{{ sport.pk }}" data-title="{% if sport.is_active %}Deactivate{% else %}Activate{% endif %} {{ sport.name }}" data-message="This will {% if sport.is_active %}hide this sport from active selection{% else %}make this sport active again{% endif %}."><i class="bi bi-toggle-off"></i> {% if sport.is_active %}Deactivate{% else %}Activate{% endif %}</button></li>
+                  <li><button class="dropdown-item text-danger" data-bs-toggle="modal" data-bs-target="#confirmModal" data-action="delete" data-id="{{ sport.pk }}" data-title="Delete {{ sport.name }}" data-message="This permanently deletes the sport and related records if the database allows it."><i class="bi bi-trash"></i> Delete</button></li>
+                </ul>
+              </div>
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="4" class="empty-state">No sports created yet. Use Add Sport to create the first one.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<div class="modal fade" id="sportModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <form class="modal-content" method="post">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="create" data-field="action">
+      <input type="hidden" name="sport_id" data-field="id">
+      <div class="modal-header">
+        <h5 class="modal-title">Add Sport</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label">Sport Name</label>
+          <input class="form-control" name="name" data-field="name" placeholder="e.g. Basketball, Football" required>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Description</label>
+          <textarea class="form-control" name="description" data-field="description" rows="3"></textarea>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" name="is_active" data-field="active" checked>
+          <label class="form-check-label">Active</label>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-primary" type="submit"><i class="bi bi-check2"></i> Save Sport</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="modal fade" id="sportViewModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">Sport Details</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body detail-list">
+        <div><span>Sport</span><strong data-field="view-name"></strong></div>
+        <div><span>Description</span><strong data-field="view-description"></strong></div>
+        <div><span>Teams</span><strong data-field="view-teams"></strong></div>
+        <div><span>Status</span><strong data-field="view-status"></strong></div>
+      </div>
+      <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="confirmModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <form class="modal-content" method="post">
+      {% csrf_token %}
+      <input type="hidden" name="action" data-field="confirm-action">
+      <input type="hidden" name="sport_id" data-field="confirm-id">
+      <div class="modal-header">
+        <h5 class="modal-title">Confirm Action</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body"><p class="mb-0" data-field="confirm-message"></p></div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-danger" type="submit">Confirm</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.getElementById('sportModal').addEventListener('show.bs.modal', event => {
+    const button = event.relatedTarget;
+    const modal = event.currentTarget;
+    const mode = button?.dataset.mode || 'create';
+    modal.querySelector('.modal-title').textContent = mode === 'edit' ? 'Edit Sport' : 'Add Sport';
+    modal.querySelector('[data-field="action"]').value = mode === 'edit' ? 'update' : 'create';
+    modal.querySelector('[data-field="id"]').value = button?.dataset.id || '';
+    modal.querySelector('[data-field="name"]').value = button?.dataset.name || '';
+    modal.querySelector('[data-field="description"]').value = button?.dataset.description || '';
+    modal.querySelector('[data-field="active"]').checked = button?.dataset.active !== 'false';
+  });
+  document.getElementById('confirmModal').addEventListener('show.bs.modal', event => {
+    const button = event.relatedTarget;
+    const modal = event.currentTarget;
+    modal.querySelector('.modal-title').textContent = button.dataset.title;
+    modal.querySelector('[data-field="confirm-action"]').value = button.dataset.action;
+    modal.querySelector('[data-field="confirm-id"]').value = button.dataset.id;
+    modal.querySelector('[data-field="confirm-message"]').textContent = button.dataset.message;
+  });
+  document.getElementById('sportViewModal').addEventListener('show.bs.modal', event => {
+    const button = event.relatedTarget;
+    const modal = event.currentTarget;
+    ['name','description','teams','status'].forEach(key => {
+      modal.querySelector(`[data-field="view-${key}"]`).textContent = button.dataset[key] || '-';
+    });
+  });
+</script>
+{% endblock %}

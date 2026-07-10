@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <p class="eyebrow">Dashboard</p>
+    <h1>Sports operations</h1>
+  </div>
+  <a class="btn btn-primary" href="{% url 'sessions' %}">Schedule Practice</a>
+</div>
+
+<div class="metric-grid">
+  {% if user.is_superuser or user.profile.role == 'SUPER_ADMIN' or user.profile.role == 'SUB_ADMIN' %}
+    <div class="metric"><span>Sports</span><strong>{{ admin_stats.sports }}</strong></div>
+    <div class="metric"><span>Teams</span><strong>{{ admin_stats.teams }}</strong></div>
+    <div class="metric"><span>Students</span><strong>{{ admin_stats.students }}</strong></div>
+    <div class="metric"><span>Trainers</span><strong>{{ admin_stats.trainers }}</strong></div>
+    <div class="metric"><span>Boys Teams</span><strong>{{ admin_stats.boys_teams }}</strong></div>
+    <div class="metric"><span>Girls Teams</span><strong>{{ admin_stats.girls_teams }}</strong></div>
+  {% endif %}
+  <div class="metric"><span>Attendance</span><strong>{% if attendance_percent != None %}{{ attendance_percent }}%{% else %}No records{% endif %}</strong></div>
+  <div class="metric"><span>Unread Feedback</span><strong>{{ unread_feedback }}</strong></div>
+</div>
+
+{% if user.is_superuser or user.profile.role == 'SUPER_ADMIN' or user.profile.role == 'SUB_ADMIN' %}
+<div class="row g-4">
+  <div class="col-lg-4">
+    <section class="panel chart-panel">
+      <div class="section-title"><h2>Teams by Gender</h2></div>
+      <canvas id="teamGenderChart"></canvas>
+    </section>
+  </div>
+  <div class="col-lg-4">
+    <section class="panel chart-panel">
+      <div class="section-title"><h2>Students vs Trainers</h2></div>
+      <canvas id="peopleChart"></canvas>
+    </section>
+  </div>
+  <div class="col-lg-4">
+    <section class="panel chart-panel">
+      <div class="section-title"><h2>Sports and Teams</h2></div>
+      <canvas id="inventoryChart"></canvas>
+    </section>
+  </div>
+  <div class="col-lg-7">
+{% else %}
+<div class="row g-4">
+  <div class="col-lg-7">
+{% endif %}
+    <section class="panel">
+      <div class="section-title"><h2>Today</h2></div>
+      {% include "core/session_table.html" with sessions=today_sessions %}
+    </section>
+  </div>
+  <div class="col-lg-5">
+    <section class="panel">
+      <div class="section-title"><h2>Sports-wise sessions</h2></div>
+      <div class="list-group list-group-flush">
+        {% for sport in sport_stats %}
+          <div class="list-group-item d-flex justify-content-between px-0">
+            <span>{{ sport.name }}</span><strong>{{ sport.session_count }}</strong>
+          </div>
+        {% empty %}
+          <p class="text-muted mb-0">No sports created yet.</p>
+        {% endfor %}
+      </div>
+    </section>
+  </div>
+</div>
+
+<section class="panel mt-4">
+  <div class="section-title"><h2>Upcoming sessions</h2><a href="{% url 'sessions' %}">View all</a></div>
+  {% include "core/session_table.html" with sessions=upcoming_sessions %}
+</section>
+{{ dashboard_chart_data|json_script:"dashboard-chart-data" }}
+{% endblock %}
+
+{% block scripts %}
+{% if user.is_superuser or user.profile.role == 'SUPER_ADMIN' or user.profile.role == 'SUB_ADMIN' %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+  const chartData = JSON.parse(document.getElementById('dashboard-chart-data').textContent);
+  const colors = ['#003366', '#7FB3D5', '#0056B3', '#687280'];
+
+  new Chart(document.getElementById('teamGenderChart'), {
+    type: 'doughnut',
+    data: { labels: chartData.teamGender.labels, datasets: [{ data: chartData.teamGender.data, backgroundColor: [colors[0], colors[1]], borderWidth: 0 }] },
+    options: { plugins: { legend: { position: 'bottom' } }, cutout: '62%' }
+  });
+
+  new Chart(document.getElementById('peopleChart'), {
+    type: 'bar',
+    data: { labels: chartData.people.labels, datasets: [{ data: chartData.people.data, backgroundColor: [colors[1], colors[0]], borderRadius: 8 }] },
+    options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
+  });
+
+  new Chart(document.getElementById('inventoryChart'), {
+    type: 'bar',
+    data: { labels: chartData.inventory.labels, datasets: [{ data: chartData.inventory.data, backgroundColor: [colors[2], colors[3]], borderRadius: 8 }] },
+    options: { indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: { precision: 0 } } } }
+  });
+</script>
+{% endif %}
+{% endblock %}

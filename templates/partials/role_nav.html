@@ -1,0 +1,33 @@
+<div class="nav-section">
+  <p class="nav-label">Main</p>
+  <a class="{% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}" href="{% url 'dashboard' %}"><i class="bi bi-speedometer2"></i><span>Dashboard</span></a>
+  <a class="{% if request.resolver_match.url_name == 'sessions' %}active{% endif %}" href="{% url 'sessions' %}"><i class="bi bi-calendar-event"></i><span>Calendar</span></a>
+  {% if user.is_superuser or user.profile.role == 'SUPER_ADMIN' or user.profile.role == 'SUB_ADMIN' or user.profile.role == 'TRAINER' or user.profile.role == 'COORDINATOR' %}
+    <a class="{% if request.resolver_match.url_name == 'sessions' %}active{% endif %}" href="{% url 'sessions' %}"><i class="bi bi-plus-circle"></i><span>Schedule Practice</span></a>
+  {% endif %}
+  <a class="{% if request.resolver_match.url_name == 'teams' %}active{% endif %}" href="{% url 'teams' %}"><i class="bi bi-trophy"></i><span>My Sports</span></a>
+  <a class="{% if request.resolver_match.url_name == 'my_attendance' %}active{% endif %}" href="{% url 'my_attendance' %}"><i class="bi bi-clipboard-check"></i><span>My Attendance</span></a>
+  <a class="{% if request.resolver_match.url_name == 'feedback' %}active{% endif %}" href="{% url 'feedback' %}"><i class="bi bi-chat-left-text"></i><span>Feedback</span></a>
+</div>
+
+{% if user.is_superuser or user.profile.role == 'SUPER_ADMIN' or user.profile.role == 'SUB_ADMIN' %}
+  <div class="nav-section">
+    <p class="nav-label">Administration</p>
+    <a class="{% if request.resolver_match.url_name == 'sports' %}active{% endif %}" href="{% url 'sports' %}"><i class="bi bi-grid"></i><span>Sports</span></a>
+    <a class="{% if request.resolver_match.url_name == 'teams' %}active{% endif %}" href="{% url 'teams' %}"><i class="bi bi-diagram-3"></i><span>Teams</span></a>
+    <a class="{% if request.resolver_match.url_name == 'members' %}active{% endif %}" href="{% url 'members' %}"><i class="bi bi-people"></i><span>Add Students</span></a>
+    <a class="{% if request.resolver_match.url_name == 'trainers' %}active{% endif %}" href="{% url 'trainers' %}"><i class="bi bi-person-workspace"></i><span>Add Trainer</span></a>
+    <a class="{% if request.resolver_match.url_name == 'reports' %}active{% endif %}" href="{% url 'reports' %}"><i class="bi bi-bar-chart"></i><span>Reports</span></a>
+    <a href="/admin/"><i class="bi bi-gear"></i><span>Settings</span></a>
+  </div>
+{% elif user.profile.role == 'TRAINER' or user.profile.role == 'COORDINATOR' %}
+  <div class="nav-section">
+    <p class="nav-label">Trainer</p>
+    <a class="{% if request.resolver_match.url_name == 'members' %}active{% endif %}" href="{% url 'members' %}"><i class="bi bi-people"></i><span>Team Students</span></a>
+  </div>
+{% elif user.profile.role == 'CAPTAIN' or user.profile.role == 'VICE_CAPTAIN' %}
+  <div class="nav-section">
+    <p class="nav-label">Team Lead</p>
+    <a class="{% if request.resolver_match.url_name == 'members' %}active{% endif %}" href="{% url 'members' %}"><i class="bi bi-people"></i><span>Team Students</span></a>
+  </div>
+{% endif %}

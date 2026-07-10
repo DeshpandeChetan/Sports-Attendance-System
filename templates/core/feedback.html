@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-head"><div><p class="eyebrow">Private</p><h1>Feedback</h1></div><a class="btn btn-primary" href="{% url 'send_feedback' %}">Send Feedback</a></div>
+<div class="row g-4">
+  <div class="col-lg-6"><section class="panel"><div class="section-title"><h2>Received</h2></div>
+    {% for item in received %}
+      <article class="feedback-item"><strong>{{ item.sender|default:"System" }}</strong><span>{{ item.created_at|date:"d M Y, h:i A" }}</span><p>{{ item.message }}</p></article>
+    {% empty %}<p class="text-muted">No received feedback.</p>{% endfor %}
+  </section></div>
+  <div class="col-lg-6"><section class="panel"><div class="section-title"><h2>Sent</h2></div>
+    {% for item in sent %}
+      <article class="feedback-item"><strong>To {{ item.receiver }}</strong><span>{{ item.created_at|date:"d M Y, h:i A" }}</span><p>{{ item.message }}</p></article>
+    {% empty %}<p class="text-muted">No sent feedback.</p>{% endfor %}
+  </section></div>
+</div>
+{% endblock %}

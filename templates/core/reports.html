@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-head">
+  <div><p class="eyebrow">Admin</p><h1>Reports</h1></div>
+  <div class="d-flex gap-2">
+    <a class="btn btn-outline-primary" href="{% url 'reports_export' 'excel' %}?{{ request.GET.urlencode }}">Excel</a>
+    <a class="btn btn-outline-primary" href="{% url 'reports_export' 'pdf' %}?{{ request.GET.urlencode }}">PDF</a>
+  </div>
+</div>
+<section class="panel mb-4">
+  <form class="row g-3" method="get">
+    <div class="col-md-2">{{ form.sport.label_tag }}{{ form.sport }}</div>
+    <div class="col-md-2">{{ form.team.label_tag }}{{ form.team }}</div>
+    <div class="col-md-3">{{ form.student.label_tag }}{{ form.student }}</div>
+    <div class="col-md-2">{{ form.start_date.label_tag }}{{ form.start_date }}</div>
+    <div class="col-md-2">{{ form.end_date.label_tag }}{{ form.end_date }}</div>
+    <div class="col-md-1 d-flex align-items-end"><button class="btn btn-primary w-100">Go</button></div>
+  </form>
+</section>
+<section class="panel">
+  <div class="table-responsive"><table class="table align-middle">
+    <thead><tr><th>Date</th><th>Sport</th><th>Team</th><th>Student</th><th>Status</th><th>Marked By</th></tr></thead>
+    <tbody>{% for record in records %}
+      <tr><td>{{ record.session.start_at|date:"d M Y" }}</td><td>{{ record.session.team.sport.name }}</td><td>{{ record.session.team.get_gender_display }} {{ record.session.team.name }}</td><td>{{ record.member.get_full_name|default:record.member.username }}</td><td>{{ record.get_status_display }}</td><td>{{ record.marked_by|default:"-" }}</td></tr>
+    {% empty %}<tr><td colspan="6" class="text-muted">No report data found.</td></tr>{% endfor %}</tbody>
+  </table></div>
+</section>
+{% endblock %}

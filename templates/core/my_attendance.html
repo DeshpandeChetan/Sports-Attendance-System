@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-head"><div><p class="eyebrow">Member</p><h1>My attendance</h1></div><div class="metric mini"><span>Attendance %</span><strong>{% if percentage != None %}{{ percentage }}%{% else %}No records{% endif %}</strong></div></div>
+<section class="panel">
+  <div class="table-responsive"><table class="table align-middle">
+    <thead><tr><th>Date</th><th>Sport / Team</th><th>Session</th><th>Status</th></tr></thead>
+    <tbody>{% for record in records %}
+      <tr><td>{{ record.session.start_at|date:"d M Y" }}</td><td>{{ record.session.team.sport.name }} · {{ record.session.team.get_gender_display }} {{ record.session.team.name }}</td><td>{{ record.session.title }}</td><td>{{ record.get_status_display }}</td></tr>
+    {% empty %}<tr><td colspan="4" class="text-muted">No attendance has been marked yet.</td></tr>{% endfor %}</tbody>
+  </table></div>
+</section>
+{% endblock %}

@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+{% block title %}Add Students{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><p class="eyebrow">Roster</p><h1>Add Students</h1><p class="text-muted mb-0">Create student records, assign teams, and approve Google login requests.</p></div>
+  {% if user.is_superuser or user.profile.role == 'SUPER_ADMIN' or user.profile.role == 'SUB_ADMIN' %}
+    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#memberModal" data-mode="create"><i class="bi bi-person-plus"></i> Add Student</button>
+  {% endif %}
+</div>
+
+{% if user.is_superuser or user.profile.role == 'SUPER_ADMIN' or user.profile.role == 'SUB_ADMIN' %}
+<section class="panel mb-4">
+  <div class="section-title"><h2>Pending Login Requests</h2><span class="badge text-bg-light">{{ pending_requests|length }} Pending</span></div>
+  <div class="table-responsive">
+    <table class="table align-middle data-table">
+      <thead><tr><th>Name</th><th>Email</th><th>Requested</th><th class="text-end">Actions</th></tr></thead>
+      <tbody>
+        {% for request_item in pending_requests %}
+          <tr>
+            <td>{{ request_item.full_name|default:"-" }}</td>
+            <td>{{ request_item.email }}</td>
+            <td>{{ request_item.requested_at|date:"d M Y, h:i A" }}</td>
+            <td class="text-end">
+              <form class="d-inline" method="post">{% csrf_token %}<input type="hidden" name="request_id" value="{{ request_item.pk }}"><input type="hidden" name="action" value="approve_request"><button class="btn btn-sm btn-primary">Approve</button></form>
+              <form class="d-inline" method="post">{% csrf_token %}<input type="hidden" name="request_id" value="{{ request_item.pk }}"><input type="hidden" name="action" value="reject_request"><button class="btn btn-sm btn-outline-secondary">Reject</button></form>
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="4" class="empty-state">No pending login requests.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+
+<section class="panel">
+  <div class="table-responsive">
+    <table class="table align-middle data-table">
+      <thead><tr><th>Student</th><th>Email</th><th>Mobile</th><th>Department</th><th>Class</th><th>Team</th><th>Status</th><th class="text-end">Actions</th></tr></thead>
+      <tbody>
+        {% for item in memberships %}
+          <tr>
+            <td><strong>{{ item.user.get_full_name|default:item.user.username }}</strong></td>
+            <td>{{ item.user.email }}</td>
+            <td>{{ item.user.profile.phone|default:"-" }}</td>
+            <td>{{ item.user.profile.department|default:"-" }}</td>
+            <td>{{ item.user.profile.class_name|default:"-" }}</td>
+            <td>{{ item.team.sport.name }} · {{ item.team.get_gender_display }} {{ item.team.name }}</td>
+            <td>{% if item.is_active %}<span class="badge text-bg-success">Active</span>{% else %}<span class="badge text-bg-secondary">Inactive</span>{% endif %}</td>
+            <td class="text-end">
+              {% if user.is_superuser or user.profile.role == 'SUPER_ADMIN' or user.profile.role == 'SUB_ADMIN' %}
+                <div class="dropdown">
+                  <button class="btn btn-sm btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown">Actions</button>
+                  <ul class="dropdown-menu dropdown-menu-end">
+                    <li><button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#studentViewModal" data-name="{{ item.user.get_full_name|default:item.user.username }}" data-email="{{ item.user.email }}" data-mobile="{{ item.user.profile.phone|default:'-' }}" data-department="{{ item.user.profile.department|default:'-' }}" data-class-name="{{ item.user.profile.class_name|default:'-' }}" data-team="{{ item.team.sport.name }} - {{ item.team.get_gender_display }} {{ item.team.name }}" data-status="{{ item.is_active|yesno:'Active,Inactive' }}"><i class="bi bi-eye"></i> View</button></li>
+                    <li><button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#memberModal" data-mode="edit" data-id="{{ item.pk }}" data-name="{{ item.user.get_full_name|default:item.user.username }}" data-email="{{ item.user.email }}" data-mobile="{{ item.user.profile.phone }}" data-department="{{ item.user.profile.department }}" data-class-name="{{ item.user.profile.class_name }}" data-team="{{ item.team_id }}" data-active="{{ item.is_active|yesno:'true,false' }}"><i class="bi bi-pencil"></i> Edit</button></li>
+                    <li><button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#memberConfirmModal" data-action="{% if item.is_active %}deactivate{% else %}activate{% endif %}" data-id="{{ item.pk }}" data-title="{% if item.is_active %}Deactivate{% else %}Activate{% endif %} Member" data-message="Confirm this roster status change."><i class="bi bi-toggle-off"></i> {% if item.is_active %}Deactivate{% else %}Activate{% endif %}</button></li>
+                    <li><button class="dropdown-item text-danger" data-bs-toggle="modal" data-bs-target="#memberConfirmModal" data-action="delete" data-id="{{ item.pk }}" data-title="Delete Assignment" data-message="This removes the student from this team."><i class="bi bi-trash"></i> Delete</button></li>
+                  </ul>
+                </div>
+              {% else %}-{% endif %}
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="8" class="empty-state">No students added yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<div class="modal fade" id="memberModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <form class="modal-content" method="post">
+      {% csrf_token %}
+      <input type="hidden" name="action" data-field="action" value="create">
+      <input type="hidden" name="membership_id" data-field="id">
+      <div class="modal-header"><h5 class="modal-title">Add Student</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <div class="row g-3">
+          <div class="col-md-6"><label class="form-label">Student Name</label><input class="form-control" name="student_name" data-field="name" required></div>
+          <div class="col-md-6"><label class="form-label">Student Email</label><input class="form-control" type="email" name="student_email" data-field="email" required></div>
+          <div class="col-md-6"><label class="form-label">Mobile Number</label><input class="form-control" name="mobile_number" data-field="mobile" inputmode="numeric" pattern="[0-9]{10}" maxlength="10" placeholder="10 digit mobile number"></div>
+          <div class="col-md-6"><label class="form-label">Department</label><input class="form-control" name="department" data-field="department"></div>
+          <div class="col-md-6"><label class="form-label">Class</label><input class="form-control" name="class_name" data-field="class-name"></div>
+          <div class="col-12"><label class="form-label">Team</label><select class="form-select" name="team" data-field="team" required>{% for team in teams %}<option value="{{ team.pk }}">{{ team.sport.name }} - {{ team.get_gender_display }} {{ team.name }}</option>{% endfor %}</select></div>
+        </div>
+        <div class="form-check mt-3"><input class="form-check-input" type="checkbox" name="is_active" data-field="active" checked><label class="form-check-label">Active</label></div>
+      </div>
+      <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button><button class="btn btn-primary" type="submit">Save Student</button></div>
+    </form>
+  </div>
+</div>
+
+<div class="modal fade" id="studentViewModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">Student Details</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body detail-list">
+        <div><span>Name</span><strong data-field="view-name"></strong></div>
+        <div><span>Email</span><strong data-field="view-email"></strong></div>
+        <div><span>Mobile</span><strong data-field="view-mobile"></strong></div>
+        <div><span>Department</span><strong data-field="view-department"></strong></div>
+        <div><span>Class</span><strong data-field="view-class-name"></strong></div>
+        <div><span>Team</span><strong data-field="view-team"></strong></div>
+        <div><span>Status</span><strong data-field="view-status"></strong></div>
+      </div>
+      <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="memberConfirmModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <form class="modal-content" method="post">
+      {% csrf_token %}
+      <input type="hidden" name="action" data-field="confirm-action">
+      <input type="hidden" name="membership_id" data-field="confirm-id">
+      <div class="modal-header"><h5 class="modal-title">Confirm</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body"><p class="mb-0" data-field="confirm-message"></p></div>
+      <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button><button class="btn btn-danger" type="submit">Confirm</button></div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.getElementById('memberModal')?.addEventListener('show.bs.modal', event => {
+    const b = event.relatedTarget;
+    const modal = event.currentTarget;
+    const mode = b?.dataset.mode || 'create';
+    modal.querySelector('.modal-title').textContent = mode === 'edit' ? 'Edit Student' : 'Add Student';
+    modal.querySelector('[data-field="action"]').value = mode === 'edit' ? 'update' : 'create';
+    ['id','name','email','mobile','department','className','team'].forEach(key => {
+      const field = modal.querySelector(`[data-field="${key.replace(/[A-Z]/g, m => '-' + m.toLowerCase())}"]`);
+      if (field) field.value = b?.dataset[key] || '';
+    });
+    modal.querySelector('[data-field="active"]').checked = b?.dataset.active !== 'false';
+  });
+  document.getElementById('studentViewModal')?.addEventListener('show.bs.modal', event => {
+    const b = event.relatedTarget;
+    const modal = event.currentTarget;
+    ['name','email','mobile','department','className','team','status'].forEach(key => {
+      const field = modal.querySelector(`[data-field="view-${key.replace(/[A-Z]/g, m => '-' + m.toLowerCase())}"]`);
+      if (field) field.textContent = b?.dataset[key] || '-';
+    });
+  });
+  document.getElementById('memberConfirmModal')?.addEventListener('show.bs.modal', event => {
+    const b = event.relatedTarget;
+    const modal = event.currentTarget;
+    modal.querySelector('.modal-title').textContent = b.dataset.title;
+    modal.querySelector('[data-field="confirm-action"]').value = b.dataset.action;
+    modal.querySelector('[data-field="confirm-id"]').value = b.dataset.id;
+    modal.querySelector('[data-field="confirm-message"]').textContent = b.dataset.message;
+  });
+</script>
+{% endblock %}

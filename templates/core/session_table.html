@@ -1,0 +1,24 @@
+<div class="table-responsive">
+  <table class="table align-middle">
+    <thead><tr><th>Session</th><th>Team</th><th>Date</th><th>Status</th><th></th></tr></thead>
+    <tbody>
+      {% for session in sessions %}
+        <tr>
+          <td><strong>{{ session.title }}</strong><div class="text-muted small">{{ session.venue }}</div></td>
+          <td>{{ session.team.sport.name }} · {{ session.team.get_gender_display }} {{ session.team.name }}</td>
+          <td>{{ session.start_at|date:"d M Y, h:i A" }}</td>
+          <td>{% if session.attendance_submitted %}<span class="badge text-bg-success">Submitted</span>{% else %}<span class="badge text-bg-warning">Pending</span>{% endif %}</td>
+          <td class="text-end">
+            {% if session.attendance_submitted %}
+              <a class="btn btn-sm btn-outline-primary" href="{% url 'attendance_detail' session.pk %}">View</a>
+            {% else %}
+              <a class="btn btn-sm btn-primary" href="{% url 'take_attendance' session.pk %}">Attendance</a>
+            {% endif %}
+          </td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="5" class="text-muted">No sessions found.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
