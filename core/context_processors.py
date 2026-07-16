@@ -1,6 +1,35 @@
 from .models import Team, UserProfile
 
 
+def breadcrumbs(request):
+    match = getattr(request, "resolver_match", None)
+    url_name = getattr(match, "url_name", "") if match else ""
+    labels = {
+        "dashboard": "Dashboard",
+        "analytics": "Analytics",
+        "sports": "Sports",
+        "teams": "Teams",
+        "members": "Add Students",
+        "member_detail": "Student Details",
+        "trainers": "Add Trainer",
+        "venues": "Venues",
+        "settings": "Settings",
+        "sessions": "Schedule Practice",
+        "attendance_detail": "Attendance Details",
+        "take_attendance": "Take Attendance",
+        "delegate_attendance": "Assign Session Incharge",
+        "my_attendance": "My Attendance",
+        "my_profile": "My Profile",
+        "feedback": "Feedback",
+        "reports": "Reports",
+    }
+    if not request.user.is_authenticated:
+        return {}
+    if url_name == "dashboard":
+        return {"breadcrumb_items": []}
+    return {"breadcrumb_items": [{"label": "Dashboard", "url_name": "dashboard"}, {"label": labels.get(url_name, "Page")}]}
+
+
 def role_display(request):
     user = getattr(request, "user", None)
     if not user or not user.is_authenticated:

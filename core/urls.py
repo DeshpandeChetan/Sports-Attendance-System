@@ -4,6 +4,7 @@ from . import views
 
 urlpatterns = [
     path("", views.dashboard, name="dashboard"),
+    path("analytics/", views.analytics, name="analytics"),
     path("login/", views.login_page, name="login"),
     path("sports/", views.sports_list, name="sports"),
     path("venues/", views.venues_list, name="venues"),
@@ -13,6 +14,7 @@ urlpatterns = [
     path("teams/new/", views.team_form, name="team_create"),
     path("teams/<int:pk>/edit/", views.team_form, name="team_edit"),
     path("members/", views.members_list, name="members"),
+    path("members/<int:pk>/details/", views.member_detail, name="member_detail"),
     path("trainers/", views.trainers_list, name="trainers"),
     path("settings/", views.settings_page, name="settings"),
     path("settings/users/<int:pk>/restore/", views.restore_user, name="restore_user"),

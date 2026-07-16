@@ -6,7 +6,8 @@
 <form method="post">
   {% csrf_token %}
   <section class="panel">
-    <div class="table-responsive"><table class="table align-middle">
+    <div class="section-title"><h2>Student List</h2></div>
+    <div class="table-responsive"><table class="table align-middle data-table">
       <thead><tr><th>Member</th><th>Status</th><th>Remarks</th></tr></thead>
       <tbody>{% for member in members %}
         <tr>

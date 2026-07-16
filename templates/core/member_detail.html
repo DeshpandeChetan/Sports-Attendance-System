@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Student Details{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <p class="eyebrow">Student Details</p>
+    <h1>{{ student.get_full_name|default:student.email }}</h1>
+    <p class="text-muted mb-0">Profile, teams, and attendance history.</p>
+  </div>
+  <a class="btn btn-outline-primary" href="{% url 'members' %}"><i class="bi bi-arrow-left"></i> Back to Add Students</a>
+</div>
+
+<section class="panel mb-4">
+  <div class="section-title"><h2>Student Profile</h2></div>
+  <div class="detail-list">
+    <div><span>Name</span><strong>{{ student.get_full_name|default:student.username }}</strong></div>
+    <div><span>Email</span><strong>{{ student.email }}</strong></div>
+    <div><span>Mobile</span><strong>{{ student.profile.phone|default:"-" }}</strong></div>
+    <div><span>Department</span><strong>{{ student.profile.department|default:"-" }}</strong></div>
+    <div><span>Class</span><strong>{{ student.profile.class_name|default:"-" }}</strong></div>
+    <div><span>Register No</span><strong>{{ student.profile.register_no|default:"-" }}</strong></div>
+    <div><span>Gender</span><strong>{{ student.profile.gender|default:"-" }}</strong></div>
+    <div><span>DOB</span><strong>{{ student.profile.dob|date:"d M Y"|default:"-" }}</strong></div>
+    <div><span>Address</span><strong>{{ student.profile.address|default:"-" }}</strong></div>
+    <div><span>Status</span><strong>{% if student.is_active %}Active{% else %}Inactive{% endif %}</strong></div>
+  </div>
+</section>
+
+<section class="panel mb-4">
+  <div class="section-title"><h2>Associated Sports / Teams</h2></div>
+  <div class="table-responsive">
+    <table class="table align-middle data-table">
+      <thead><tr><th>Sport</th><th>Team</th><th>Type</th><th>Status</th></tr></thead>
+      <tbody>
+        {% for membership in memberships %}
+          <tr>
+            <td>{{ membership.team.sport.name }}</td>
+            <td>{{ membership.team.get_gender_display }} {{ membership.team.name }}</td>
+            <td>{{ membership.team.get_team_type_display }}</td>
+            <td>{% if membership.is_active %}<span class="badge text-bg-success">Active</span>{% else %}<span class="badge text-bg-secondary">Inactive</span>{% endif %}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="4" class="empty-state">No team assignment found.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="panel">
+  <div class="section-title"><h2>Attendance Details</h2></div>
+  <div class="table-responsive">
+    <table class="table align-middle data-table">
+      <thead><tr><th>Date</th><th>Sport</th><th>Team</th><th>Session</th><th>Schedule</th><th>Venue</th><th>Status</th><th>Marked By</th></tr></thead>
+      <tbody>
+        {% for record in records %}
+          <tr>
+            <td>{{ record.session.start_at|date:"d M Y" }}</td>
+            <td>{{ record.session.team.sport.name }}</td>
+            <td>{{ record.session.team.get_gender_display }} {{ record.session.team.name }}</td>
+            <td>{{ record.session.title|default:"Practice session" }}</td>
+            <td>{{ record.session.get_schedule_slot_display }}</td>
+            <td>{{ record.session.venue }}</td>
+            <td>{% include "partials/attendance_badge.html" with status=record.status label=record.get_status_display %}</td>
+            <td>{{ record.marked_by|default:"-" }}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="8" class="empty-state">No attendance records found.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

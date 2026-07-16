@@ -114,12 +114,55 @@ body {
     linear-gradient(180deg, rgba(0, 51, 102, .98), rgba(0, 36, 75, .98));
   border-right: 1px solid rgba(127, 179, 213, .28);
   box-shadow: 18px 0 40px rgba(0, 51, 102, .16);
-  padding: 1.1rem .95rem;
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 64px);
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: hidden;
+  padding: 1.1rem .95rem 0;
+  position: sticky;
+  top: 64px;
 }
 
 .offcanvas .sidebar {
   border-right: 0;
+  height: 100%;
+  min-height: 100%;
+  position: static;
   padding: 0;
+}
+
+.sidebar-inner {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow-x: hidden;
+}
+
+.sidebar-nav {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-bottom: 1rem;
+  scrollbar-color: rgba(127, 179, 213, .55) transparent;
+  scrollbar-width: thin;
+}
+
+.sidebar-nav::-webkit-scrollbar {
+  width: 4px;
+}
+
+.sidebar-nav::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar-nav::-webkit-scrollbar-thumb {
+  background: rgba(127, 179, 213, .55);
+  border-radius: 999px;
 }
 
 .nav-section {
@@ -146,6 +189,7 @@ body {
   padding: .72rem .9rem;
   text-decoration: none;
   transition: background .18s ease, border-color .18s ease, color .18s ease, transform .18s ease;
+  max-width: 100%;
 }
 
 .sidebar a i {
@@ -164,6 +208,8 @@ body {
 .sidebar a span {
   font-size: .94rem;
   font-weight: 700;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .sidebar a:hover {
@@ -190,11 +236,70 @@ body {
   color: #ffffff;
 }
 
+.sidebar-footer {
+  background: rgba(0, 31, 66, .96);
+  border-top: 1px solid rgba(127, 179, 213, .32);
+  color: rgba(255, 255, 255, .86);
+  font-size: .82rem;
+  line-height: 1.45;
+  margin: auto -.95rem 0;
+  padding: 1rem .95rem 1.1rem;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.sidebar-footer p {
+  margin: 0 0 .55rem;
+}
+
+.sidebar-footer a {
+  border: 0;
+  border-radius: 0;
+  color: #ffffff;
+  display: block;
+  font-size: .82rem;
+  font-weight: 700;
+  line-height: 1.45;
+  margin-top: .35rem;
+  min-height: 0;
+  padding: 0;
+  text-decoration: none;
+}
+
+.sidebar-footer a:hover,
+.sidebar-footer a:focus {
+  background: transparent;
+  color: var(--tertiary);
+  transform: none;
+}
+
 .content {
   background:
     linear-gradient(180deg, rgba(104, 114, 128, .09), rgba(255, 255, 255, .18));
   min-width: 0;
   padding: 1.5rem;
+}
+
+.app-breadcrumb {
+  margin-bottom: 1rem;
+}
+
+.app-breadcrumb .breadcrumb {
+  background: rgba(255, 255, 255, .62);
+  border: 1px solid rgba(104, 114, 128, .18);
+  border-radius: .85rem;
+  padding: .65rem .85rem;
+}
+
+.app-breadcrumb a {
+  color: var(--secondary);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.app-breadcrumb .active {
+  color: var(--neutral);
+  font-weight: 700;
 }
 
 .page-head {
@@ -245,6 +350,10 @@ body {
   gap: 1rem;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   margin-bottom: 1.5rem;
+}
+
+.admin-metric-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .metric span {
@@ -330,12 +439,12 @@ body {
   padding: .45rem .65rem;
 }
 
-.gender-boys {
+.gender-male {
   background: rgba(0, 86, 179, .14);
   color: #003366;
 }
 
-.gender-girls {
+.gender-female {
   background: rgba(217, 137, 0, .16);
   color: #7a4c00;
 }
@@ -373,6 +482,20 @@ body {
 
 .data-table {
   min-width: 760px;
+}
+
+.table-tools {
+  align-items: end;
+  display: grid;
+  gap: .75rem;
+  grid-template-columns: minmax(220px, 1.4fr) repeat(auto-fit, minmax(150px, .8fr));
+  margin-bottom: .85rem;
+}
+
+.table-tools .form-label {
+  font-size: .72rem;
+  margin-bottom: .25rem;
+  text-transform: uppercase;
 }
 
 .data-table th,
@@ -505,6 +628,7 @@ body.modal-open {
 .detail-list {
   display: grid;
   gap: .75rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .detail-list div {
@@ -527,6 +651,12 @@ body.modal-open {
   color: var(--ink);
   font-size: .95rem;
   overflow-wrap: anywhere;
+}
+
+@media (max-width: 575.98px) {
+  .detail-list {
+    grid-template-columns: 1fr;
+  }
 }
 
 .session-card {
@@ -775,7 +905,19 @@ body.modal-open {
   }
 
   .metric-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .metric {
+    min-width: 0;
+  }
+
+  .metric strong {
+    font-size: 1.15rem;
   }
 }
 

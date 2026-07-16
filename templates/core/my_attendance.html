@@ -1,12 +1,65 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="page-head"><div><p class="eyebrow">Member</p><h1>My attendance</h1></div><div class="metric mini"><span>Attendance %</span><strong>{% if percentage != None %}{{ percentage }}%{% else %}No records{% endif %}</strong></div></div>
+<div class="page-head">
+  <div><p class="eyebrow">Student</p><h1>My Attendance</h1></div>
+  <div class="metric mini"><span>Attendance %</span><strong>{% if percentage != None %}{{ percentage }}%{% else %}No records{% endif %}</strong></div>
+</div>
+
 <section class="panel">
-  <div class="table-responsive"><table class="table align-middle">
-    <thead><tr><th>Date</th><th>Sport / Team</th><th>Session</th><th>Status</th></tr></thead>
-    <tbody>{% for record in records %}
-      <tr><td>{{ record.session.start_at|date:"d M Y" }}</td><td>{{ record.session.team.sport.name }} · {{ record.session.team.get_gender_display }} {{ record.session.team.name }}</td><td>{{ record.session.title }}</td><td>{{ record.get_status_display }}</td></tr>
-    {% empty %}<tr><td colspan="4" class="text-muted">No attendance has been marked yet.</td></tr>{% endfor %}</tbody>
-  </table></div>
+  <div class="section-title"><h2>Attendance List</h2></div>
+  <div class="table-responsive">
+    <table class="table align-middle data-table">
+      <thead><tr><th>Date</th><th>Sport / Team</th><th>Session</th><th>Status</th><th class="text-end">Actions</th></tr></thead>
+      <tbody>
+        {% for record in records %}
+          <tr>
+            <td>{{ record.session.start_at|date:"d M Y" }}</td>
+            <td>{{ record.session.team.sport.name }} - {{ record.session.team.get_gender_display }} {{ record.session.team.name }}</td>
+            <td>{{ record.session.title|default:"Practice session" }}</td>
+            <td>{% include "partials/attendance_badge.html" with status=record.status label=record.get_status_display %}</td>
+            <td class="text-end">
+              <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#attendanceViewModal" data-date="{{ record.session.start_at|date:'d M Y' }}" data-schedule="{{ record.session.get_schedule_slot_display }}" data-sport="{{ record.session.team.sport.name }}" data-team="{{ record.session.team.get_gender_display }} {{ record.session.team.name }}" data-session="{{ record.session.title|default:'Practice session' }}" data-venue="{{ record.session.venue }}" data-status="{{ record.get_status_display }}" data-marked-by="{{ record.marked_by|default:'-' }}" data-marked-at="{{ record.marked_at|date:'d M Y, h:i A' }}" data-remarks="{{ record.remarks|default:'-' }}"><i class="bi bi-eye"></i> View</button>
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="5" class="text-muted">No attendance has been marked yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 </section>
+
+<div class="modal fade" id="attendanceViewModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">Attendance Details</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body detail-list">
+        <div><span>Date</span><strong data-field="view-date"></strong></div>
+        <div><span>Schedule</span><strong data-field="view-schedule"></strong></div>
+        <div><span>Sport</span><strong data-field="view-sport"></strong></div>
+        <div><span>Team</span><strong data-field="view-team"></strong></div>
+        <div><span>Session</span><strong data-field="view-session"></strong></div>
+        <div><span>Venue</span><strong data-field="view-venue"></strong></div>
+        <div><span>Status</span><strong data-field="view-status"></strong></div>
+        <div><span>Marked By</span><strong data-field="view-marked-by"></strong></div>
+        <div><span>Marked At</span><strong data-field="view-marked-at"></strong></div>
+        <div><span>Remarks</span><strong data-field="view-remarks"></strong></div>
+      </div>
+      <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button></div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.getElementById('attendanceViewModal')?.addEventListener('show.bs.modal', event => {
+    const b = event.relatedTarget;
+    const modal = event.currentTarget;
+    ['date','schedule','sport','team','session','venue','status','markedBy','markedAt','remarks'].forEach(key => {
+      const field = modal.querySelector(`[data-field="view-${key.replace(/[A-Z]/g, m => '-' + m.toLowerCase())}"]`);
+      if (field) field.textContent = b?.dataset[key] || '-';
+    });
+  });
+</script>
 {% endblock %}

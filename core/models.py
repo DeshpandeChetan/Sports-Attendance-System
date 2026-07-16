@@ -85,13 +85,13 @@ class Team(TimeStampedModel):
         RECREATIONAL = "RECREATIONAL", "Recreational"
 
     class TeamGender(models.TextChoices):
-        BOYS = "BOYS", "Boys"
-        GIRLS = "GIRLS", "Girls"
+        MALE = "MALE", "Male"
+        FEMALE = "FEMALE", "Female"
 
     sport = models.ForeignKey(Sport, on_delete=models.CASCADE, related_name="teams")
     name = models.CharField(max_length=120)
     team_type = models.CharField(max_length=20, choices=TeamType.choices)
-    gender = models.CharField(max_length=10, choices=TeamGender.choices, default=TeamGender.BOYS)
+    gender = models.CharField(max_length=10, choices=TeamGender.choices, default=TeamGender.MALE)
     captain = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="captained_teams")
     vice_captain = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="vice_captained_teams")
     coordinator = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="coordinated_teams")

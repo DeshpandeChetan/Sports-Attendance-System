@@ -59,8 +59,8 @@ def dashboard(request):
     role = role_for(request.user)
     today = timezone.localdate()
     sessions = visible_sessions(request.user)
-    boys_teams = Team.objects.filter(gender=Team.TeamGender.BOYS).count()
-    girls_teams = Team.objects.filter(gender=Team.TeamGender.GIRLS).count()
+    male_teams = Team.objects.filter(gender=Team.TeamGender.MALE).count()
+    female_teams = Team.objects.filter(gender=Team.TeamGender.FEMALE).count()
     student_count = User.objects.filter(profile__role=UserProfile.Role.MEMBER).count()
     trainer_count = User.objects.filter(profile__role__in=[UserProfile.Role.TRAINER, UserProfile.Role.COORDINATOR]).count()
     sport_count = Sport.objects.count()
@@ -75,17 +75,34 @@ def dashboard(request):
             "sports": sport_count,
             "students": student_count,
             "trainers": trainer_count,
-            "boys_teams": boys_teams,
-            "girls_teams": girls_teams,
-            "teams": boys_teams + girls_teams,
+            "male_teams": male_teams,
+            "female_teams": female_teams,
+            "teams": male_teams + female_teams,
         },
         "dashboard_chart_data": {
-            "teamGender": {"labels": ["Boys Teams", "Girls Teams"], "data": [boys_teams, girls_teams]},
+            "teamGender": {"labels": ["Male Teams", "Female Teams"], "data": [male_teams, female_teams]},
             "people": {"labels": ["Students", "Trainers"], "data": [student_count, trainer_count]},
-            "inventory": {"labels": ["Sports", "Teams"], "data": [sport_count, boys_teams + girls_teams]},
+            "inventory": {"labels": ["Sports", "Teams"], "data": [sport_count, male_teams + female_teams]},
         },
     }
     return render(request, "core/dashboard.html", context)
+
+
+@login_required
+@role_required(*ADMIN_ROLES)
+def analytics(request):
+    male_teams = Team.objects.filter(gender=Team.TeamGender.MALE).count()
+    female_teams = Team.objects.filter(gender=Team.TeamGender.FEMALE).count()
+    student_count = User.objects.filter(profile__role=UserProfile.Role.MEMBER).count()
+    trainer_count = User.objects.filter(profile__role__in=[UserProfile.Role.TRAINER, UserProfile.Role.COORDINATOR]).count()
+    sport_count = Sport.objects.count()
+    team_count = male_teams + female_teams
+    chart_data = {
+        "teamGender": {"labels": ["Male Teams", "Female Teams"], "data": [male_teams, female_teams]},
+        "people": {"labels": ["Students", "Trainers"], "data": [student_count, trainer_count]},
+        "inventory": {"labels": ["Sports", "Teams"], "data": [sport_count, team_count]},
+    }
+    return render(request, "core/analytics.html", {"dashboard_chart_data": chart_data})
 
 
 def visible_sessions(user):
@@ -371,6 +388,20 @@ def members_list(request):
     teams = Team.objects.filter(is_active=True).select_related("sport").order_by("sport__name", "name")
     login_requests = LoginAccessRequest.objects.exclude(status=LoginAccessRequest.Status.APPROVED).order_by("status", "-requested_at")
     return render(request, "core/members.html", {"memberships": memberships, "student_rows": student_rows, "teams": teams, "login_requests": login_requests})
+
+
+@login_required
+@role_required(*ADMIN_ROLES)
+def member_detail(request, pk):
+    student = get_object_or_404(User.objects.select_related("profile"), pk=pk)
+    memberships = Membership.objects.filter(user=student).select_related("team", "team__sport")
+    records = AttendanceRecord.objects.filter(member=student).select_related("session", "session__team", "session__team__sport", "marked_by")
+    breadcrumb_items = [
+        {"label": "Dashboard", "url_name": "dashboard"},
+        {"label": "Add Students", "url_name": "members"},
+        {"label": student.get_full_name() or student.email or student.username},
+    ]
+    return render(request, "core/member_detail.html", {"student": student, "memberships": memberships, "records": records, "breadcrumb_items": breadcrumb_items})
 
 
 @login_required

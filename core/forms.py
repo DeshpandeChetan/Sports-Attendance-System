@@ -77,6 +77,7 @@ class ProfileForm(BootstrapFormMixin, forms.ModelForm):
     first_name = forms.CharField(max_length=150, required=False)
     last_name = forms.CharField(max_length=150, required=False)
     email = forms.EmailField(disabled=True, required=False)
+    gender = forms.ChoiceField(choices=[("", "---------"), ("Male", "Male"), ("Female", "Female")], required=False)
 
     class Meta:
         model = UserProfile

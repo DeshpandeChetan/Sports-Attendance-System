@@ -18,10 +18,11 @@
   </form>
 </section>
 <section class="panel">
-  <div class="table-responsive"><table class="table align-middle">
+  <div class="section-title"><h2>Attendance Report List</h2></div>
+  <div class="table-responsive"><table class="table align-middle data-table">
     <thead><tr><th>Date</th><th>Sport</th><th>Team</th><th>Student</th><th>Status</th><th>Marked By</th></tr></thead>
     <tbody>{% for record in records %}
-      <tr><td>{{ record.session.start_at|date:"d M Y" }}</td><td>{{ record.session.team.sport.name }}</td><td>{{ record.session.team.get_gender_display }} {{ record.session.team.name }}</td><td>{{ record.member.get_full_name|default:record.member.username }}</td><td>{{ record.get_status_display }}</td><td>{{ record.marked_by|default:"-" }}</td></tr>
+      <tr><td>{{ record.session.start_at|date:"d M Y" }}</td><td>{{ record.session.team.sport.name }}</td><td>{{ record.session.team.get_gender_display }} {{ record.session.team.name }}</td><td>{{ record.member.get_full_name|default:record.member.username }}</td><td>{% include "partials/attendance_badge.html" with status=record.status label=record.get_status_display %}</td><td>{{ record.marked_by|default:"-" }}</td></tr>
     {% empty %}<tr><td colspan="6" class="text-muted">No report data found.</td></tr>{% endfor %}</tbody>
   </table></div>
 </section>

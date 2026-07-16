@@ -1,0 +1,9 @@
+{% if status == "PRESENT" %}
+  <span class="badge text-bg-success">{{ label }}</span>
+{% elif status == "ABSENT" %}
+  <span class="badge text-bg-danger">{{ label }}</span>
+{% elif status == "LATE" %}
+  <span class="badge text-bg-warning">{{ label }}</span>
+{% else %}
+  <span class="badge text-bg-info">{{ label }}</span>
+{% endif %}

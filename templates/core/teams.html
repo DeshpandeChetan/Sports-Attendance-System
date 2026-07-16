@@ -9,6 +9,7 @@
 </div>
 
 <section class="panel">
+  <div class="section-title"><h2>Team List</h2><span class="small text-muted">All sports teams</span></div>
   <div class="table-responsive">
     <table class="table align-middle data-table">
       <thead><tr><th>Team</th><th>Type</th><th>Gender</th><th>Captain</th><th>Vice Captain</th><th>Trainer</th><th>Status</th><th class="text-end">Actions</th></tr></thead>
@@ -18,10 +19,10 @@
             <td><strong>{{ team.sport.name }}</strong><div class="text-muted small">{{ team.name }}</div></td>
             <td>{{ team.get_team_type_display }}</td>
             <td>
-              {% if team.gender == 'BOYS' %}
-                <span class="badge gender-badge gender-boys"><i class="bi bi-gender-male"></i> Boys</span>
+              {% if team.gender == 'MALE' %}
+                <span class="badge gender-badge gender-male"><i class="bi bi-gender-male"></i> Male</span>
               {% else %}
-                <span class="badge gender-badge gender-girls"><i class="bi bi-gender-female"></i> Girls</span>
+                <span class="badge gender-badge gender-female"><i class="bi bi-gender-female"></i> Female</span>
               {% endif %}
             </td>
             <td>{{ team.captain|default:"-" }}</td>
@@ -62,7 +63,7 @@
           <div class="col-md-6"><label class="form-label">Sport</label><select class="form-select" name="sport" data-field="sport" required>{% for sport in sports %}<option value="{{ sport.pk }}">{{ sport.name }}</option>{% endfor %}</select></div>
           <div class="col-md-6"><label class="form-label">Team Name</label><input class="form-control" name="name" data-field="name" required></div>
           <div class="col-md-6"><label class="form-label">Team Type</label><select class="form-select" name="team_type" data-field="type"><option value="UNIVERSITY">University</option><option value="RESERVE">Reserve</option><option value="RECREATIONAL">Recreational</option></select></div>
-          <div class="col-md-6"><label class="form-label">Boys/Girls Team</label><select class="form-select" name="gender" data-field="gender"><option value="BOYS">Boys</option><option value="GIRLS">Girls</option></select></div>
+          <div class="col-md-6"><label class="form-label">Male/Female Team</label><select class="form-select" name="gender" data-field="gender"><option value="MALE">Male</option><option value="FEMALE">Female</option></select></div>
           <div class="col-md-6"><label class="form-label">Captain</label><select class="form-select" name="captain" data-field="captain"><option value="">---------</option>{% for item in users %}<option value="{{ item.pk }}">{{ item.get_full_name|default:item.username }}</option>{% endfor %}</select></div>
           <div class="col-md-6"><label class="form-label">Vice Captain</label><select class="form-select" name="vice_captain" data-field="vice-captain"><option value="">---------</option>{% for item in users %}<option value="{{ item.pk }}">{{ item.get_full_name|default:item.username }}</option>{% endfor %}</select></div>
           <div class="col-md-6"><label class="form-label">Trainer</label><select class="form-select" name="coordinator" data-field="coordinator"><option value="">---------</option>{% for item in users %}<option value="{{ item.pk }}">{{ item.get_full_name|default:item.username }}</option>{% endfor %}</select></div>
