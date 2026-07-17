@@ -877,6 +877,128 @@ body.modal-open {
   line-height: 1;
 }
 
+.notification-badge {
+  align-items: center;
+  background: #dc3545;
+  border: 2px solid #ffffff;
+  border-radius: 999px;
+  color: #ffffff;
+  display: inline-flex;
+  font-size: .65rem;
+  font-weight: 700;
+  height: 1.15rem;
+  justify-content: center;
+  min-width: 1.15rem;
+  padding: 0 .25rem;
+  position: absolute;
+  right: .15rem;
+  top: .1rem;
+}
+
+.notification-menu {
+  border: 0;
+  border-radius: .75rem;
+  box-shadow: 0 1rem 2.5rem rgba(0, 51, 102, .18);
+  overflow: hidden;
+  padding: 0;
+  width: min(360px, calc(100vw - 1.5rem));
+}
+
+.notification-head,
+.notification-foot {
+  align-items: center;
+  background: #eaf2ff;
+  display: flex;
+  justify-content: space-between;
+  padding: .75rem 1rem;
+}
+
+.notification-head .btn {
+  color: var(--primary);
+  padding: 0;
+  text-decoration: none;
+}
+
+.notification-list {
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.notification-item {
+  color: inherit;
+  display: flex;
+  gap: .7rem;
+  padding: .85rem 1rem;
+  text-decoration: none;
+}
+
+.notification-item + .notification-item {
+  border-top: 1px solid rgba(0, 51, 102, .08);
+}
+
+.notification-item small,
+.notification-item em {
+  color: #687280;
+  display: block;
+  font-size: .78rem;
+  font-style: normal;
+}
+
+.notification-dot {
+  background: var(--secondary);
+  border-radius: 999px;
+  flex: 0 0 .55rem;
+  height: .55rem;
+  margin-top: .45rem;
+  width: .55rem;
+}
+
+.notification-item.is-read,
+.notification-row.is-read {
+  opacity: .55;
+}
+
+.notification-item.is-read .notification-dot {
+  background: #adb5bd;
+}
+
+.notification-empty {
+  color: #687280;
+  padding: 1rem;
+  text-align: center;
+}
+
+.notification-foot a {
+  color: var(--primary);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.notification-page-list {
+  display: grid;
+  gap: .75rem;
+}
+
+.notification-row {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid rgba(0, 51, 102, .12);
+  border-radius: .75rem;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  padding: 1rem;
+}
+
+.notification-row h3 {
+  font-size: 1rem;
+  margin: 0 0 .25rem;
+}
+
+.notification-row p {
+  margin: 0 0 .25rem;
+}
+
 @media (max-width: 991.98px) {
   .app-shell {
     display: block;
@@ -924,6 +1046,19 @@ body.modal-open {
 @media (max-width: 575.98px) {
   .navbar-brand span:last-child {
     display: none;
+  }
+
+  .notification-dropdown {
+    position: static;
+  }
+
+  .notification-menu {
+    left: .75rem !important;
+    position: absolute !important;
+    right: .75rem !important;
+    top: 3.75rem !important;
+    transform: none !important;
+    width: auto;
   }
 
   .panel,

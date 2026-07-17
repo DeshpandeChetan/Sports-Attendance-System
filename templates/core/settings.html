@@ -14,6 +14,16 @@
       </div>
     </section>
   </div>
+  <div class="col-md-4">
+    <a class="text-decoration-none text-reset" href="{% url 'notifications' %}">
+      <section class="panel h-100">
+        <div class="d-flex align-items-center gap-3">
+          <span class="stat-icon"><i class="bi bi-bell"></i></span>
+          <div><p class="text-muted mb-1">All Notifications</p><h2 class="mb-0">{{ notification_count }}</h2></div>
+        </div>
+      </section>
+    </a>
+  </div>
 </div>
 
 <section class="panel">

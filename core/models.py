@@ -219,3 +219,25 @@ class Feedback(TimeStampedModel):
 
     def __str__(self):
         return f"{self.get_feedback_type_display()} from {self.sender} to {self.receiver}"
+
+
+class Notification(TimeStampedModel):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="notifications")
+    actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="notifications_created")
+    title = models.CharField(max_length=160)
+    message = models.CharField(max_length=255)
+    target_url = models.CharField(max_length=255, blank=True)
+    sport = models.ForeignKey(Sport, on_delete=models.SET_NULL, null=True, blank=True, related_name="notifications")
+    team = models.ForeignKey(Team, on_delete=models.SET_NULL, null=True, blank=True, related_name="notifications")
+    session = models.ForeignKey(Session, on_delete=models.SET_NULL, null=True, blank=True, related_name="notifications")
+    is_read = models.BooleanField(default=False)
+    read_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["user", "is_read", "-created_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.title} for {self.user}"

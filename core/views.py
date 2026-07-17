@@ -36,6 +36,7 @@ from .models import (
     Feedback,
     LoginAccessRequest,
     Membership,
+    Notification,
     Session,
     Sport,
     Team,
@@ -116,6 +117,47 @@ def visible_sessions(user):
         | Q(team__coordinator=user)
         | Q(delegates__assigned_to=user)
     ).distinct()
+
+
+def admin_users():
+    return User.objects.filter(Q(is_superuser=True) | Q(profile__role__in=ADMIN_ROLES), is_active=True).distinct()
+
+
+def users_for_team(team):
+    users = User.objects.filter(
+        Q(memberships__team=team, memberships__is_active=True)
+        | Q(pk=team.captain_id)
+        | Q(pk=team.vice_captain_id)
+        | Q(pk=team.coordinator_id),
+        is_active=True,
+    ).distinct()
+    return users
+
+
+def create_notifications(users, title, message, actor=None, target_url="", sport=None, team=None, session=None):
+    notifications = []
+    seen = set()
+    actor_id = getattr(actor, "pk", None)
+    for user in users:
+        if not user or user.pk in seen or user.pk == actor_id:
+            continue
+        seen.add(user.pk)
+        notifications.append(Notification(
+            user=user,
+            actor=actor if getattr(actor, "is_authenticated", False) else None,
+            title=title,
+            message=message,
+            target_url=target_url,
+            sport=sport,
+            team=team,
+            session=session,
+        ))
+    if notifications:
+        Notification.objects.bulk_create(notifications)
+
+
+def notify_common_action(actor, title, message, target_url):
+    create_notifications(User.objects.filter(is_active=True), title, message, actor=actor, target_url=target_url)
 
 
 def attendance_percentage(user):
@@ -474,7 +516,7 @@ def import_sessions_from_file(uploaded_file, user):
         other_venue = str(row.get("other_venue") or "").strip()
         if venue.lower() == "other" and other_venue:
             venue = f"Other - {other_venue}"
-        Session.objects.create(
+        session = Session.objects.create(
             team=team,
             title=str(row.get("title") or "Practice session").strip() or "Practice session",
             start_at=timezone.make_aware(datetime.combine(start_date, start_clock)),
@@ -483,6 +525,16 @@ def import_sessions_from_file(uploaded_file, user):
             venue=venue,
             notes=str(row.get("notes") or "").strip(),
             scheduled_by=user,
+        )
+        create_notifications(
+            users_for_team(team),
+            "New practice session",
+            f"{session.title or 'Practice session'} scheduled for {team}.",
+            actor=user,
+            target_url=reverse("sessions"),
+            sport=team.sport,
+            team=team,
+            session=session,
         )
         created += 1
     return created, errors
@@ -499,7 +551,14 @@ def sports_list(request):
         if action in {"create", "update"}:
             form = SportForm(request.POST, instance=sport)
             if form.is_valid():
-                form.save()
+                saved_sport = form.save()
+                if action == "create":
+                    notify_common_action(
+                        request.user,
+                        "New sport added",
+                        f"{saved_sport.name} has been added to the sports department.",
+                        reverse("sports"),
+                    )
                 messages.success(request, "Sport saved successfully.")
             else:
                 messages.error(request, "Please correct the sport details and try again.")
@@ -537,7 +596,14 @@ def venues_list(request):
         if action in {"create", "update"}:
             form = VenueForm(request.POST, instance=venue)
             if form.is_valid():
-                form.save()
+                saved_venue = form.save()
+                if action == "create":
+                    notify_common_action(
+                        request.user,
+                        "New venue added",
+                        f"{saved_venue.name} is now available for practice sessions.",
+                        reverse("venues"),
+                    )
                 messages.success(request, "Venue saved successfully.")
             else:
                 messages.error(request, "Please correct the venue details and try again.")
@@ -586,7 +652,14 @@ def teams_list(request):
         if action in {"create", "update"}:
             form = TeamForm(request.POST, instance=team)
             if form.is_valid():
-                form.save()
+                saved_team = form.save()
+                if action == "create":
+                    notify_common_action(
+                        request.user,
+                        "New team added",
+                        f"{saved_team} has been created.",
+                        reverse("teams"),
+                    )
                 messages.success(request, "Team saved successfully.")
             else:
                 messages.error(request, "Please correct the team details and try again.")
@@ -749,6 +822,7 @@ def trainers_list(request):
             phone = request.POST.get("mobile_number", "").strip()
             register_no = request.POST.get("register_no", "").strip()
             selected_team_ids = request.POST.getlist("teams")
+            is_new_trainer = trainer is None and not User.objects.filter(email__iexact=email).exists()
             if not email:
                 messages.error(request, "Trainer email is required.")
                 return redirect("trainers")
@@ -773,6 +847,13 @@ def trainers_list(request):
             profile.save(update_fields=["role", "phone", "register_no", "updated_at"])
             Team.objects.filter(coordinator=trainer).exclude(pk__in=selected_team_ids).update(coordinator=None)
             Team.objects.filter(pk__in=selected_team_ids).update(coordinator=trainer)
+            if action == "create" and is_new_trainer:
+                notify_common_action(
+                    request.user,
+                    "New trainer added",
+                    f"{trainer.get_full_name() or trainer.email} has been added as a trainer.",
+                    reverse("trainers"),
+                )
             messages.success(request, "Trainer saved and assigned successfully.")
         elif action == "bulk_upload":
             try:
@@ -809,7 +890,8 @@ def trainers_list(request):
 @role_required(*ADMIN_ROLES)
 def settings_page(request):
     inactive_users = User.objects.filter(is_active=False).select_related("profile").order_by("first_name", "last_name", "email")
-    return render(request, "core/settings.html", {"inactive_users": inactive_users})
+    notification_count = Notification.objects.filter(user=request.user).count()
+    return render(request, "core/settings.html", {"inactive_users": inactive_users, "notification_count": notification_count})
 
 
 @login_required
@@ -831,6 +913,24 @@ def my_profile(request):
         messages.success(request, "Profile updated.")
         return redirect("my_profile")
     return render(request, "core/my_profile.html", {"form": form})
+
+
+@login_required
+def notifications_list(request):
+    notifications = Notification.objects.filter(user=request.user).select_related("actor", "sport", "team", "session")
+    return render(request, "core/notifications.html", {"notifications": notifications})
+
+
+@login_required
+def mark_notifications_read(request):
+    if request.method == "POST":
+        notification_id = request.POST.get("notification_id")
+        qs = Notification.objects.filter(user=request.user, is_read=False)
+        if notification_id:
+            qs = qs.filter(pk=notification_id)
+        qs.update(is_read=True, read_at=timezone.now())
+    next_url = request.POST.get("next") or request.META.get("HTTP_REFERER") or reverse("notifications")
+    return redirect(next_url)
 
 
 @login_required
@@ -867,8 +967,20 @@ def sessions_list(request):
             if form.is_valid():
                 obj = form.save(commit=False)
                 if can_schedule_session(request.user, obj.team):
+                    is_new_session = action == "create" or obj.pk is None
                     obj.scheduled_by = obj.scheduled_by or request.user
                     obj.save()
+                    if is_new_session:
+                        create_notifications(
+                            users_for_team(obj.team),
+                            "New practice session",
+                            f"{obj.title or 'Practice session'} scheduled for {obj.team}.",
+                            actor=request.user,
+                            target_url=reverse("sessions"),
+                            sport=obj.team.sport,
+                            team=obj.team,
+                            session=obj,
+                        )
                     messages.success(request, "Practice session saved successfully.")
                 else:
                     messages.error(request, "You cannot schedule for this team.")
@@ -916,8 +1028,20 @@ def session_form(request, pk=None):
         if not can_schedule_session(request.user, obj.team):
             messages.error(request, "You cannot schedule for this team.")
             return redirect("sessions")
+        is_new_session = obj.pk is None
         obj.scheduled_by = obj.scheduled_by or request.user
         obj.save()
+        if is_new_session:
+            create_notifications(
+                users_for_team(obj.team),
+                "New practice session",
+                f"{obj.title or 'Practice session'} scheduled for {obj.team}.",
+                actor=request.user,
+                target_url=reverse("sessions"),
+                sport=obj.team.sport,
+                team=obj.team,
+                session=obj,
+            )
         messages.success(request, "Practice session saved.")
         return redirect("sessions")
     return render(request, "core/form.html", {"form": form, "title": "Practice Session", "back_url": reverse("sessions")})
@@ -1054,6 +1178,16 @@ def send_feedback(request):
             messages.error(request, "No receiver is available for this feedback.")
             return redirect("feedback")
         feedback.save()
+        create_notifications(
+            [feedback.receiver],
+            "New feedback received",
+            f"{request.user.get_full_name() or request.user.email} sent you private feedback.",
+            actor=request.user,
+            target_url=reverse("feedback"),
+            session=feedback.session,
+            team=feedback.session.team if feedback.session else None,
+            sport=feedback.session.team.sport if feedback.session else None,
+        )
         messages.success(request, "Feedback sent privately.")
         return redirect("feedback")
     return render(request, "core/form.html", {"form": form, "title": "Feedback", "back_url": reverse("feedback")})

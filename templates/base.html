@@ -7,7 +7,7 @@
   <title>{% block title %}Sports Attendance{% endblock %}</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
-  <link rel="stylesheet" href="{% static 'css/app.css' %}?v=breadcrumbs-analytics-1">
+  <link rel="stylesheet" href="{% static 'css/app.css' %}?v=notifications-2">
 </head>
 <body>
   <nav class="navbar navbar-expand-lg app-topbar">
@@ -23,9 +23,43 @@
       </a>
       {% if user.is_authenticated %}
         <div class="ms-auto d-flex align-items-center gap-2">
-          <a class="btn btn-link nav-icon" href="{% url 'feedback' %}" aria-label="Feedback">
-            <i class="bi bi-bell"></i>
-          </a>
+          <div class="dropdown notification-dropdown">
+            <button class="btn btn-link nav-icon position-relative" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-label="Notifications">
+              <i class="bi bi-bell"></i>
+              {% if topbar_unread_notifications %}
+                <span class="notification-badge">{{ topbar_unread_notifications }}</span>
+              {% endif %}
+            </button>
+            <div class="dropdown-menu dropdown-menu-end notification-menu">
+              <div class="notification-head">
+                <strong>Notifications</strong>
+                {% if topbar_unread_notifications %}
+                  <form method="post" action="{% url 'mark_notifications_read' %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                    <button class="btn btn-sm btn-link" type="submit">Mark as read</button>
+                  </form>
+                {% endif %}
+              </div>
+              <div class="notification-list">
+                {% for notification in topbar_notifications %}
+                  <a class="notification-item {% if notification.is_read %}is-read{% endif %}" href="{{ notification.target_url|default:'#' }}">
+                    <span class="notification-dot"></span>
+                    <span>
+                      <strong>{{ notification.title }}</strong>
+                      <small>{{ notification.message }}</small>
+                      <em>{{ notification.created_at|timesince }} ago</em>
+                    </span>
+                  </a>
+                {% empty %}
+                  <div class="notification-empty">No notifications yet.</div>
+                {% endfor %}
+              </div>
+              <div class="notification-foot">
+                <a href="{% url 'notifications' %}">Show More</a>
+              </div>
+            </div>
+          </div>
           <div class="dropdown">
             <button class="btn user-chip dropdown-toggle" type="button" data-bs-toggle="dropdown">
               <span class="avatar">{{ user.first_name|first|upper|default:"U" }}</span>

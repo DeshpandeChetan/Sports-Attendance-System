@@ -1,4 +1,4 @@
-from .models import Team, UserProfile
+from .models import Notification, Team, UserProfile
 
 
 def breadcrumbs(request):
@@ -22,6 +22,7 @@ def breadcrumbs(request):
         "my_profile": "My Profile",
         "feedback": "Feedback",
         "reports": "Reports",
+        "notifications": "Notifications",
     }
     if not request.user.is_authenticated:
         return {}
@@ -51,3 +52,14 @@ def role_display(request):
     if profile.role == UserProfile.Role.COORDINATOR or Team.objects.filter(coordinator=user).exists():
         labels.append("Coordinator")
     return {"topbar_role_label": " | ".join(labels)}
+
+
+def notifications(request):
+    user = getattr(request, "user", None)
+    if not user or not user.is_authenticated:
+        return {}
+    qs = Notification.objects.filter(user=user).select_related("actor", "team", "sport", "session")
+    return {
+        "topbar_notifications": qs[:5],
+        "topbar_unread_notifications": qs.filter(is_read=False).count(),
+    }

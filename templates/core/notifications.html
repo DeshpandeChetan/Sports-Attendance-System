@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Notifications{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <p class="eyebrow">Updates</p>
+    <h1>All Notifications</h1>
+    <p class="text-muted mb-0">Recent updates for your sports, teams, sessions, and feedback.</p>
+  </div>
+  <form method="post" action="{% url 'mark_notifications_read' %}">
+    {% csrf_token %}
+    <input type="hidden" name="next" value="{% url 'notifications' %}">
+    <button class="btn btn-outline-primary" type="submit"><i class="bi bi-check2-all"></i> Mark All Read</button>
+  </form>
+</div>
+
+<section class="panel">
+  <div class="section-title"><h2>Notification List</h2><span class="small text-muted">Latest first</span></div>
+  <div class="notification-page-list">
+    {% for notification in notifications %}
+      <article class="notification-row {% if notification.is_read %}is-read{% endif %}">
+        <div>
+          <h3>{{ notification.title }}</h3>
+          <p>{{ notification.message }}</p>
+          <small>
+            {{ notification.created_at|date:"d M Y, h:i A" }}
+            {% if notification.team %} · {{ notification.team }}{% endif %}
+          </small>
+        </div>
+        <div class="d-flex gap-2">
+          {% if notification.target_url %}
+            <a class="btn btn-sm btn-primary" href="{{ notification.target_url }}">Open</a>
+          {% endif %}
+          {% if not notification.is_read %}
+            <form method="post" action="{% url 'mark_notifications_read' %}">
+              {% csrf_token %}
+              <input type="hidden" name="notification_id" value="{{ notification.pk }}">
+              <input type="hidden" name="next" value="{% url 'notifications' %}">
+              <button class="btn btn-sm btn-outline-secondary" type="submit">Mark Read</button>
+            </form>
+          {% endif %}
+        </div>
+      </article>
+    {% empty %}
+      <div class="empty-state">No notifications yet.</div>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}
