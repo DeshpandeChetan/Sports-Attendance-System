@@ -4,7 +4,10 @@
 <div class="page-head">
   <div><p class="eyebrow">Calendar</p><h1>Practice Sessions</h1><p class="text-muted mb-0">Schedule, filter, delegate, and take attendance.</p></div>
   {% if can_schedule_any %}
-    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#sessionModal" data-mode="create"><i class="bi bi-calendar-plus"></i> Schedule Practice</button>
+    <div class="d-flex flex-wrap gap-2">
+      <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#sessionModal" data-mode="create"><i class="bi bi-calendar-plus"></i> Schedule Practice</button>
+      <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#bulkUploadModal"><i class="bi bi-upload"></i> Bulk Upload</button>
+    </div>
   {% endif %}
 </div>
 
@@ -118,6 +121,9 @@
     </form>
   </div>
 </div>
+{% if can_schedule_any %}
+  {% include "partials/bulk_upload_modal.html" with bulk_kind="sessions" bulk_title="Practice Sessions" %}
+{% endif %}
 {% endblock %}
 
 {% block scripts %}

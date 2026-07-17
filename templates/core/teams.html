@@ -4,7 +4,10 @@
 <div class="page-head">
   <div><p class="eyebrow">Teams</p><h1>Sports Teams</h1><p class="text-muted mb-0">Manage university, reserve, and recreational teams.</p></div>
   {% if user.is_superuser or user.profile.role == 'SUPER_ADMIN' or user.profile.role == 'SUB_ADMIN' %}
-    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#teamModal" data-mode="create"><i class="bi bi-plus-lg"></i> Add Team</button>
+    <div class="d-flex flex-wrap gap-2">
+      <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#teamModal" data-mode="create"><i class="bi bi-plus-lg"></i> Add Team</button>
+      <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#bulkUploadModal"><i class="bi bi-upload"></i> Bulk Upload</button>
+    </div>
   {% endif %}
 </div>
 
@@ -106,6 +109,9 @@
     </form>
   </div>
 </div>
+{% if user.is_superuser or user.profile.role == 'SUPER_ADMIN' or user.profile.role == 'SUB_ADMIN' %}
+  {% include "partials/bulk_upload_modal.html" with bulk_kind="teams" bulk_title="Teams" %}
+{% endif %}
 {% endblock %}
 
 {% block scripts %}

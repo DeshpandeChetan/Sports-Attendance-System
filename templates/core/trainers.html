@@ -7,22 +7,28 @@
     <h1>Add Trainer</h1>
     <p class="text-muted mb-0">Assign trainers to one or more teams across sports.</p>
   </div>
-  <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#trainerModal" data-mode="create">
-    <i class="bi bi-person-plus"></i> Add Trainer
-  </button>
+  <div class="d-flex flex-wrap gap-2">
+    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#trainerModal" data-mode="create">
+      <i class="bi bi-person-plus"></i> Add Trainer
+    </button>
+    <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#bulkUploadModal">
+      <i class="bi bi-upload"></i> Bulk Upload
+    </button>
+  </div>
 </div>
 
 <section class="panel">
   <div class="section-title"><h2>Trainer List</h2><span class="small text-muted">Assigned coaching staff</span></div>
   <div class="table-responsive">
     <table class="table align-middle data-table">
-      <thead><tr><th>Trainer</th><th>Email</th><th>Mobile</th><th>Assigned Sports / Teams</th><th>Status</th><th class="text-end">Actions</th></tr></thead>
+      <thead><tr><th>Trainer</th><th>Email</th><th>Mobile</th><th>Reg No</th><th>Assigned Sports / Teams</th><th>Status</th><th class="text-end">Actions</th></tr></thead>
       <tbody>
         {% for trainer in trainers %}
           <tr>
             <td><strong>{{ trainer.get_full_name|default:trainer.username }}</strong></td>
             <td>{{ trainer.email }}</td>
             <td>{{ trainer.profile.phone|default:"-" }}</td>
+            <td>{{ trainer.profile.register_no|default:"-" }}</td>
             <td>
               {% for team in trainer.coordinated_teams.all %}
                 <span class="badge soft-badge me-1 mb-1">{{ team.sport.name }} - {{ team.get_gender_display }} {{ team.name }}</span>
@@ -43,6 +49,7 @@
                       data-name="{{ trainer.get_full_name|default:trainer.username }}"
                       data-email="{{ trainer.email }}"
                       data-mobile="{{ trainer.profile.phone|default:'-' }}"
+                      data-register-no="{{ trainer.profile.register_no|default:'-' }}"
                       data-status="{% if trainer.profile.role == 'TRAINER' or trainer.profile.role == 'COORDINATOR' %}Active{% else %}Inactive{% endif %}"
                       data-teams="{% for team in trainer.coordinated_teams.all %}{{ team.sport.name }} - {{ team.get_gender_display }} {{ team.name }}{% if not forloop.last %}, {% endif %}{% empty %}No teams assigned{% endfor %}">
                       <i class="bi bi-eye"></i> View
@@ -58,6 +65,7 @@
                       data-name="{{ trainer.get_full_name|default:trainer.username }}"
                       data-email="{{ trainer.email }}"
                       data-mobile="{{ trainer.profile.phone }}"
+                      data-register-no="{{ trainer.profile.register_no }}"
                       data-teams="{% for team in trainer.coordinated_teams.all %}{{ team.pk }}{% if not forloop.last %},{% endif %}{% endfor %}">
                       <i class="bi bi-pencil"></i> Edit
                     </button>
@@ -69,7 +77,7 @@
             </td>
           </tr>
         {% empty %}
-          <tr><td colspan="6" class="empty-state">No trainers added yet.</td></tr>
+          <tr><td colspan="7" class="empty-state">No trainers added yet.</td></tr>
         {% endfor %}
       </tbody>
     </table>
@@ -88,6 +96,7 @@
           <div class="col-md-6"><label class="form-label">Trainer Name</label><input class="form-control" name="trainer_name" data-field="name" required></div>
           <div class="col-md-6"><label class="form-label">Trainer Email</label><input class="form-control" type="email" name="trainer_email" data-field="email" required></div>
           <div class="col-md-6"><label class="form-label">Mobile Number</label><input class="form-control" name="mobile_number" data-field="mobile" inputmode="numeric" pattern="[0-9]{10}" maxlength="10" placeholder="10 digit mobile number"></div>
+          <div class="col-md-6"><label class="form-label">Reg No</label><input class="form-control" name="register_no" data-field="register-no"></div>
           <div class="col-12">
             <label class="form-label">Assign Sports and Teams</label>
             <div class="team-check-grid">
@@ -116,6 +125,7 @@
         <div><span>Name</span><strong data-field="view-name"></strong></div>
         <div><span>Email</span><strong data-field="view-email"></strong></div>
         <div><span>Mobile</span><strong data-field="view-mobile"></strong></div>
+        <div><span>Reg No</span><strong data-field="view-register-no"></strong></div>
         <div><span>Status</span><strong data-field="view-status"></strong></div>
         <div><span>Assigned Teams</span><strong data-field="view-teams"></strong></div>
       </div>
@@ -136,6 +146,7 @@
     </form>
   </div>
 </div>
+{% include "partials/bulk_upload_modal.html" with bulk_kind="trainers" bulk_title="Trainers" %}
 {% endblock %}
 
 {% block scripts %}
@@ -147,7 +158,7 @@
     const selected = (b?.dataset.teams || '').split(',').filter(Boolean);
     modal.querySelector('.modal-title').textContent = mode === 'edit' ? 'Edit Trainer' : 'Add Trainer';
     modal.querySelector('[data-field="action"]').value = mode === 'edit' ? 'update' : 'create';
-    ['id', 'name', 'email', 'mobile'].forEach(key => {
+    ['id', 'name', 'email', 'mobile', 'registerNo'].forEach(key => {
       const field = modal.querySelector(`[data-field="${key}"]`);
       if (field) field.value = b?.dataset[key] || '';
     });
@@ -158,7 +169,7 @@
   document.getElementById('trainerViewModal')?.addEventListener('show.bs.modal', event => {
     const b = event.relatedTarget;
     const modal = event.currentTarget;
-    ['name', 'email', 'mobile', 'status', 'teams'].forEach(key => {
+    ['name', 'email', 'mobile', 'registerNo', 'status', 'teams'].forEach(key => {
       const field = modal.querySelector(`[data-field="view-${key}"]`);
       if (field) field.textContent = b?.dataset[key] || '-';
     });

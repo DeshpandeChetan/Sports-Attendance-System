@@ -1,0 +1,26 @@
+<div class="modal fade" id="bulkUploadModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <form class="modal-content" method="post" enctype="multipart/form-data">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="bulk_upload">
+      <div class="modal-header">
+        <h5 class="modal-title">Bulk Upload {{ bulk_title }}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted small mb-3">Upload an Excel file using the same columns as the add form.</p>
+        <div class="mb-3">
+          <label class="form-label">Excel File</label>
+          <input class="form-control" type="file" name="bulk_file" accept=".xlsx" required>
+        </div>
+        <a class="fw-semibold" href="{% url 'bulk_upload_sample' bulk_kind %}">
+          <i class="bi bi-download"></i> Download sample bulk upload file
+        </a>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-primary" type="submit"><i class="bi bi-upload"></i> Save Upload</button>
+      </div>
+    </form>
+  </div>
+</div>

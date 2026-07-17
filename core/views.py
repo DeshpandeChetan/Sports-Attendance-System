@@ -1,5 +1,5 @@
 import re
-from datetime import timedelta
+from datetime import datetime, time, timedelta
 from io import BytesIO
 
 from django.contrib import messages
@@ -11,7 +11,7 @@ from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
-from openpyxl import Workbook
+from openpyxl import Workbook, load_workbook
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from allauth.socialaccount.models import SocialApp
@@ -134,12 +134,110 @@ def role_label(user):
     return user.profile.get_role_display()
 
 
-def build_student_from_post(request, existing_user=None):
-    full_name = request.POST.get("student_name", "").strip()
-    email = request.POST.get("student_email", "").strip().lower()
-    department = request.POST.get("department", "").strip()
-    class_name = request.POST.get("class_name", "").strip()
-    phone = request.POST.get("mobile_number", "").strip()
+def split_full_name(full_name):
+    parts = (full_name or "").strip().split(" ", 1)
+    return parts[0] if parts else "", parts[1] if len(parts) > 1 else ""
+
+
+def normalize_header(value):
+    return re.sub(r"[^a-z0-9]+", "_", str(value or "").strip().lower()).strip("_")
+
+
+def truthy_cell(value, default=True):
+    if value in (None, ""):
+        return default
+    return str(value).strip().lower() in {"1", "yes", "y", "true", "active"}
+
+
+BULK_UPLOAD_TEMPLATES = {
+    "sports": {
+        "filename": "sports_bulk_upload_sample.xlsx",
+        "headers": ["Sport Name", "Description"],
+        "rows": [["Basketball", "Indoor and outdoor basketball training"]],
+    },
+    "venues": {
+        "filename": "venues_bulk_upload_sample.xlsx",
+        "headers": ["Venue Name", "Location", "Status"],
+        "rows": [["Indoor Stadium", "Main sports block", "Active"]],
+    },
+    "teams": {
+        "filename": "teams_bulk_upload_sample.xlsx",
+        "headers": ["Sport", "Team Name", "Team Type", "Gender", "Captain Email", "Vice Captain Email", "Trainer Email", "Status"],
+        "rows": [["Basketball", "Men's Team A", "University", "Male", "", "", "coach@christuniversity.in", "Active"]],
+    },
+    "students": {
+        "filename": "students_bulk_upload_sample.xlsx",
+        "headers": ["Student Name", "Student Email", "Mobile Number", "Reg No", "Department", "Class", "Team", "Status"],
+        "rows": [["Rahul Sharma", "rahul.sharma@christuniversity.in", "9876543210", "22104321", "MSDS", "2 MSc DS", "Basketball - Male Men's Team A", "Active"]],
+    },
+    "trainers": {
+        "filename": "trainers_bulk_upload_sample.xlsx",
+        "headers": ["Trainer Name", "Trainer Email", "Mobile Number", "Reg No", "Teams"],
+        "rows": [["Coach Ramesh", "coach.ramesh@christuniversity.in", "9876543211", "TRN001", "Basketball - Male Men's Team A"]],
+    },
+    "sessions": {
+        "filename": "sessions_bulk_upload_sample.xlsx",
+        "headers": ["Team", "Title", "Start Date", "End Date", "Schedule", "Venue", "Other Venue", "Notes"],
+        "rows": [["Basketball - Male Men's Team A", "Morning Tactical Drill", "2026-07-20", "2026-07-20", "Morning", "Indoor Stadium", "", "Fitness and drills"]],
+    },
+}
+
+
+def read_bulk_upload_rows(uploaded_file):
+    if not uploaded_file:
+        raise ValueError("Please choose an Excel file to upload.")
+    workbook = load_workbook(uploaded_file, data_only=True)
+    sheet = workbook.active
+    rows = list(sheet.iter_rows(values_only=True))
+    if not rows:
+        return []
+    headers = [normalize_header(cell) for cell in rows[0]]
+    data = []
+    for row in rows[1:]:
+        if not any(cell not in (None, "") for cell in row):
+            continue
+        data.append({headers[index]: row[index] if index < len(row) else "" for index in range(len(headers))})
+    return data
+
+
+def add_bulk_upload_messages(request, created, errors):
+    if created:
+        messages.success(request, f"Bulk upload completed. {created} row(s) saved.")
+    if errors:
+        detail = " ".join(errors[:5])
+        extra = f" {len(errors) - 5} more error(s)." if len(errors) > 5 else ""
+        messages.error(request, f"{len(errors)} row(s) could not be uploaded. {detail}{extra}")
+
+
+def missing_required(row, fields):
+    return [label for key, label in fields if not str(row.get(key) or "").strip()]
+
+
+def find_user_by_email(email):
+    if not email:
+        return None
+    return User.objects.filter(email__iexact=str(email).strip()).first()
+
+
+def find_team_by_label(label):
+    label = str(label or "").strip().lower()
+    if not label:
+        return None
+    for team in Team.objects.select_related("sport"):
+        labels = {
+            team.name.lower(),
+            str(team).lower(),
+            f"{team.sport.name} - {team.get_gender_display()} {team.name}".lower(),
+        }
+        if label in labels:
+            return team
+    return None
+
+
+def save_student_record(full_name, email, department="", class_name="", phone="", register_no="", existing_user=None):
+    email = str(email or "").strip().lower()
+    phone = str(phone or "").strip()
+    register_no = str(register_no or "").strip()
     if not email:
         raise ValueError("Student email is required.")
     if phone and not re.fullmatch(r"\d{10}", phone):
@@ -149,19 +247,28 @@ def build_student_from_post(request, existing_user=None):
         user = User(username=email, email=email)
         user.set_unusable_password()
     if full_name:
-        parts = full_name.split(" ", 1)
-        user.first_name = parts[0]
-        user.last_name = parts[1] if len(parts) > 1 else ""
+        user.first_name, user.last_name = split_full_name(full_name)
     user.email = email
     user.username = email
     user.save()
     profile, _ = UserProfile.objects.get_or_create(user=user)
     profile.role = UserProfile.Role.MEMBER
-    profile.department = department
-    profile.class_name = class_name
+    profile.department = str(department or "").strip()
+    profile.class_name = str(class_name or "").strip()
     profile.phone = phone
-    profile.save(update_fields=["role", "department", "class_name", "phone", "updated_at"])
+    profile.register_no = register_no
+    profile.save(update_fields=["role", "department", "class_name", "phone", "register_no", "updated_at"])
     return user
+
+
+def build_student_from_post(request, existing_user=None):
+    full_name = request.POST.get("student_name", "").strip()
+    email = request.POST.get("student_email", "").strip().lower()
+    department = request.POST.get("department", "").strip()
+    class_name = request.POST.get("class_name", "").strip()
+    phone = request.POST.get("mobile_number", "").strip()
+    register_no = request.POST.get("register_no", "").strip()
+    return save_student_record(full_name, email, department, class_name, phone, register_no, existing_user=existing_user)
 
 
 def create_student_from_access_request(access_request):
@@ -183,6 +290,205 @@ def create_student_from_access_request(access_request):
 
 
 @login_required
+def bulk_upload_sample(request, kind):
+    template = BULK_UPLOAD_TEMPLATES.get(kind)
+    if not template:
+        messages.error(request, "Unknown bulk upload sample.")
+        return redirect("dashboard")
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "Sample"
+    sheet.append(template["headers"])
+    for row in template["rows"]:
+        sheet.append(row)
+    output = BytesIO()
+    workbook.save(output)
+    output.seek(0)
+    response = HttpResponse(output.getvalue(), content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    response["Content-Disposition"] = f'attachment; filename="{template["filename"]}"'
+    return response
+
+
+def import_sports_from_file(uploaded_file):
+    created = 0
+    errors = []
+    for index, row in enumerate(read_bulk_upload_rows(uploaded_file), start=2):
+        name = str(row.get("sport_name") or row.get("name") or "").strip()
+        if not name:
+            errors.append(f"Row {index}: Sport Name is required.")
+            continue
+        Sport.objects.update_or_create(name=name, defaults={"description": str(row.get("description") or "").strip(), "is_active": True})
+        created += 1
+    return created, errors
+
+
+def import_venues_from_file(uploaded_file):
+    created = 0
+    errors = []
+    for index, row in enumerate(read_bulk_upload_rows(uploaded_file), start=2):
+        name = str(row.get("venue_name") or row.get("name") or "").strip()
+        if not name:
+            errors.append(f"Row {index}: Venue Name is required.")
+            continue
+        Venue.objects.update_or_create(
+            name=name,
+            defaults={"location": str(row.get("location") or "").strip(), "is_active": truthy_cell(row.get("status") or row.get("active"), True)},
+        )
+        created += 1
+    return created, errors
+
+
+def import_teams_from_file(uploaded_file):
+    created = 0
+    errors = []
+    type_map = {label.lower(): value for value, label in Team.TeamType.choices}
+    gender_map = {label.lower(): value for value, label in Team.TeamGender.choices}
+    for index, row in enumerate(read_bulk_upload_rows(uploaded_file), start=2):
+        sport_name = str(row.get("sport") or "").strip()
+        team_name = str(row.get("team_name") or row.get("name") or "").strip()
+        missing = []
+        if not sport_name:
+            missing.append("Sport")
+        if not team_name:
+            missing.append("Team Name")
+        if missing:
+            errors.append(f"Row {index}: {', '.join(missing)} required.")
+            continue
+        sport, _ = Sport.objects.get_or_create(name=sport_name, defaults={"is_active": True})
+        team_type = type_map.get(str(row.get("team_type") or "University").strip().lower(), Team.TeamType.UNIVERSITY)
+        gender = gender_map.get(str(row.get("gender") or "Male").strip().lower(), Team.TeamGender.MALE)
+        Team.objects.update_or_create(
+            sport=sport,
+            name=team_name,
+            team_type=team_type,
+            gender=gender,
+            defaults={
+                "captain": find_user_by_email(row.get("captain_email")),
+                "vice_captain": find_user_by_email(row.get("vice_captain_email")),
+                "coordinator": find_user_by_email(row.get("trainer_email")),
+                "is_active": truthy_cell(row.get("status") or row.get("active"), True),
+            },
+        )
+        created += 1
+    return created, errors
+
+
+def import_students_from_file(uploaded_file):
+    created = 0
+    errors = []
+    for index, row in enumerate(read_bulk_upload_rows(uploaded_file), start=2):
+        missing = missing_required(row, [("student_name", "Student Name"), ("student_email", "Student Email")])
+        if missing:
+            errors.append(f"Row {index}: {', '.join(missing)} required.")
+            continue
+        try:
+            student = save_student_record(
+                row.get("student_name"),
+                row.get("student_email"),
+                row.get("department"),
+                row.get("class"),
+                row.get("mobile_number"),
+                row.get("reg_no") or row.get("register_no"),
+            )
+            team = find_team_by_label(row.get("team"))
+            if team:
+                membership, _ = Membership.objects.get_or_create(user=student, team=team)
+                membership.is_active = truthy_cell(row.get("status") or row.get("active"), True)
+                membership.save(update_fields=["is_active", "updated_at"])
+            created += 1
+        except ValueError as exc:
+            errors.append(f"Row {index}: {exc}")
+    return created, errors
+
+
+def import_trainers_from_file(uploaded_file):
+    created = 0
+    errors = []
+    for index, row in enumerate(read_bulk_upload_rows(uploaded_file), start=2):
+        missing = missing_required(row, [("trainer_name", "Trainer Name"), ("trainer_email", "Trainer Email")])
+        if missing:
+            errors.append(f"Row {index}: {', '.join(missing)} required.")
+            continue
+        email = str(row.get("trainer_email") or "").strip().lower()
+        phone = str(row.get("mobile_number") or "").strip()
+        if phone and not re.fullmatch(r"\d{10}", phone):
+            errors.append(f"Row {index}: Mobile number must be exactly 10 digits.")
+            continue
+        trainer = User.objects.filter(email__iexact=email).first()
+        if trainer is None:
+            trainer = User(username=email, email=email)
+            trainer.set_unusable_password()
+        full_name = row.get("trainer_name")
+        if full_name:
+            trainer.first_name, trainer.last_name = split_full_name(full_name)
+        trainer.email = email
+        trainer.username = email
+        trainer.save()
+        profile, _ = UserProfile.objects.get_or_create(user=trainer)
+        profile.role = UserProfile.Role.TRAINER
+        profile.phone = phone
+        profile.register_no = str(row.get("reg_no") or row.get("register_no") or "").strip()
+        profile.save(update_fields=["role", "phone", "register_no", "updated_at"])
+        teams = [find_team_by_label(label) for label in str(row.get("teams") or "").split(",")]
+        team_ids = [team.pk for team in teams if team]
+        Team.objects.filter(coordinator=trainer).exclude(pk__in=team_ids).update(coordinator=None)
+        Team.objects.filter(pk__in=team_ids).update(coordinator=trainer)
+        created += 1
+    return created, errors
+
+
+def import_sessions_from_file(uploaded_file, user):
+    created = 0
+    errors = []
+    slot_map = {"morning": Session.ScheduleSlot.MORNING, "evening": Session.ScheduleSlot.EVENING}
+    for index, row in enumerate(read_bulk_upload_rows(uploaded_file), start=2):
+        missing = missing_required(row, [("team", "Team"), ("start_date", "Start Date"), ("end_date", "End Date"), ("schedule", "Schedule"), ("venue", "Venue")])
+        if missing:
+            errors.append(f"Row {index}: {', '.join(missing)} required.")
+            continue
+        team = find_team_by_label(row.get("team"))
+        if not team:
+            errors.append(f"Row {index}: Team was not found.")
+            continue
+        if not can_schedule_session(user, team):
+            errors.append(f"Row {index}: You cannot schedule for this team.")
+            continue
+        try:
+            start_date = row.get("start_date")
+            end_date = row.get("end_date") or start_date
+            if isinstance(start_date, datetime):
+                start_date = start_date.date()
+            if isinstance(end_date, datetime):
+                end_date = end_date.date()
+            if isinstance(start_date, str):
+                start_date = datetime.strptime(start_date.strip(), "%Y-%m-%d").date()
+            if isinstance(end_date, str):
+                end_date = datetime.strptime(end_date.strip(), "%Y-%m-%d").date()
+        except ValueError:
+            errors.append(f"Row {index}: Dates must use YYYY-MM-DD format.")
+            continue
+        slot = slot_map.get(str(row.get("schedule") or "Morning").strip().lower(), Session.ScheduleSlot.MORNING)
+        start_clock = time(6, 30) if slot == Session.ScheduleSlot.MORNING else time(16, 0)
+        end_clock = time(8, 30) if slot == Session.ScheduleSlot.MORNING else time(18, 0)
+        venue = str(row.get("venue") or "").strip()
+        other_venue = str(row.get("other_venue") or "").strip()
+        if venue.lower() == "other" and other_venue:
+            venue = f"Other - {other_venue}"
+        Session.objects.create(
+            team=team,
+            title=str(row.get("title") or "Practice session").strip() or "Practice session",
+            start_at=timezone.make_aware(datetime.combine(start_date, start_clock)),
+            end_at=timezone.make_aware(datetime.combine(end_date, end_clock)),
+            schedule_slot=slot,
+            venue=venue,
+            notes=str(row.get("notes") or "").strip(),
+            scheduled_by=user,
+        )
+        created += 1
+    return created, errors
+
+
+@login_required
 @role_required(*ADMIN_ROLES)
 def sports_list(request):
     if request.method == "POST":
@@ -197,6 +503,12 @@ def sports_list(request):
                 messages.success(request, "Sport saved successfully.")
             else:
                 messages.error(request, "Please correct the sport details and try again.")
+        elif action == "bulk_upload":
+            try:
+                created, errors = import_sports_from_file(request.FILES.get("bulk_file"))
+                add_bulk_upload_messages(request, created, errors)
+            except ValueError as exc:
+                messages.error(request, str(exc))
         elif action == "deactivate" and sport:
             sport.is_active = False
             sport.save(update_fields=["is_active", "updated_at"])
@@ -229,6 +541,12 @@ def venues_list(request):
                 messages.success(request, "Venue saved successfully.")
             else:
                 messages.error(request, "Please correct the venue details and try again.")
+        elif action == "bulk_upload":
+            try:
+                created, errors = import_venues_from_file(request.FILES.get("bulk_file"))
+                add_bulk_upload_messages(request, created, errors)
+            except ValueError as exc:
+                messages.error(request, str(exc))
         elif action == "deactivate" and venue:
             venue.is_active = False
             venue.save(update_fields=["is_active", "updated_at"])
@@ -272,6 +590,12 @@ def teams_list(request):
                 messages.success(request, "Team saved successfully.")
             else:
                 messages.error(request, "Please correct the team details and try again.")
+        elif action == "bulk_upload":
+            try:
+                created, errors = import_teams_from_file(request.FILES.get("bulk_file"))
+                add_bulk_upload_messages(request, created, errors)
+            except ValueError as exc:
+                messages.error(request, str(exc))
         elif action == "deactivate" and team:
             team.is_active = False
             team.save(update_fields=["is_active", "updated_at"])
@@ -322,6 +646,14 @@ def members_list(request):
                     create_student_from_access_request(access_request)
             message = "approved and added to Add Students" if action == "approve_request" else "rejected"
             messages.success(request, f"{access_request.email} {message}.")
+            return redirect("members")
+
+        if action == "bulk_upload":
+            try:
+                created, errors = import_students_from_file(request.FILES.get("bulk_file"))
+                add_bulk_upload_messages(request, created, errors)
+            except ValueError as exc:
+                messages.error(request, str(exc))
             return redirect("members")
 
         membership_id = request.POST.get("membership_id")
@@ -415,6 +747,7 @@ def trainers_list(request):
             full_name = request.POST.get("trainer_name", "").strip()
             email = request.POST.get("trainer_email", "").strip().lower()
             phone = request.POST.get("mobile_number", "").strip()
+            register_no = request.POST.get("register_no", "").strip()
             selected_team_ids = request.POST.getlist("teams")
             if not email:
                 messages.error(request, "Trainer email is required.")
@@ -436,10 +769,17 @@ def trainers_list(request):
             profile, _ = UserProfile.objects.get_or_create(user=trainer)
             profile.role = UserProfile.Role.TRAINER
             profile.phone = phone
-            profile.save(update_fields=["role", "phone", "updated_at"])
+            profile.register_no = register_no
+            profile.save(update_fields=["role", "phone", "register_no", "updated_at"])
             Team.objects.filter(coordinator=trainer).exclude(pk__in=selected_team_ids).update(coordinator=None)
             Team.objects.filter(pk__in=selected_team_ids).update(coordinator=trainer)
             messages.success(request, "Trainer saved and assigned successfully.")
+        elif action == "bulk_upload":
+            try:
+                created, errors = import_trainers_from_file(request.FILES.get("bulk_file"))
+                add_bulk_upload_messages(request, created, errors)
+            except ValueError as exc:
+                messages.error(request, str(exc))
         elif action == "deactivate" and trainer:
             Team.objects.filter(coordinator=trainer).update(coordinator=None)
             trainer.profile.role = UserProfile.Role.MEMBER
@@ -514,7 +854,13 @@ def sessions_list(request):
         if session and action != "create" and not can_manage_team(request.user, session.team):
             messages.error(request, "You cannot manage this session.")
             return redirect("sessions")
-        if action in {"create", "update"}:
+        if action == "bulk_upload":
+            try:
+                created, errors = import_sessions_from_file(request.FILES.get("bulk_file"), request.user)
+                add_bulk_upload_messages(request, created, errors)
+            except (ValueError, TypeError) as exc:
+                messages.error(request, str(exc))
+        elif action in {"create", "update"}:
             form = SessionForm(request.POST, instance=session)
             if not is_admin_user(request.user):
                 form.fields["team"].queryset = Team.objects.filter(coordinator=request.user)

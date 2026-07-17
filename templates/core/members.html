@@ -4,7 +4,10 @@
 <div class="page-head">
   <div><p class="eyebrow">Roster</p><h1>Add Students</h1><p class="text-muted mb-0">Create student records, assign teams, and approve Google login requests.</p></div>
   {% if user.is_superuser or user.profile.role == 'SUPER_ADMIN' or user.profile.role == 'SUB_ADMIN' %}
-    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#memberModal" data-mode="create"><i class="bi bi-person-plus"></i> Add Student</button>
+    <div class="d-flex flex-wrap gap-2">
+      <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#memberModal" data-mode="create"><i class="bi bi-person-plus"></i> Add Student</button>
+      <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#bulkUploadModal"><i class="bi bi-upload"></i> Bulk Upload</button>
+    </div>
   {% endif %}
 </div>
 
@@ -41,13 +44,14 @@
   <div class="section-title"><h2>Student List</h2><span class="small text-muted">Registered and assigned students</span></div>
   <div class="table-responsive">
     <table class="table align-middle data-table">
-      <thead><tr><th>Student</th><th>Email</th><th data-filter="false">Mobile</th><th>Department</th><th>Class</th><th>Team</th><th>Status</th><th class="text-end">Actions</th></tr></thead>
+      <thead><tr><th>Student</th><th>Email</th><th data-filter="false">Mobile</th><th>Reg No</th><th>Department</th><th>Class</th><th>Team</th><th>Status</th><th class="text-end">Actions</th></tr></thead>
       <tbody>
         {% for row in student_rows %}
           <tr>
             <td><strong>{{ row.user.get_full_name|default:row.user.username }}</strong></td>
             <td>{{ row.user.email }}</td>
             <td>{{ row.user.profile.phone|default:"-" }}</td>
+            <td>{{ row.user.profile.register_no|default:"-" }}</td>
             <td>{{ row.user.profile.department|default:"-" }}</td>
             <td>{{ row.user.profile.class_name|default:"-" }}</td>
             <td>{% if row.team %}{{ row.team.sport.name }} - {{ row.team.get_gender_display }} {{ row.team.name }}{% else %}<span class="text-muted">Not assigned</span>{% endif %}</td>
@@ -57,9 +61,9 @@
                 <div class="dropdown">
                   <button class="btn btn-sm btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown">Actions</button>
                   <ul class="dropdown-menu dropdown-menu-end">
-                    <li><button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#studentViewModal" data-name="{{ row.user.get_full_name|default:row.user.username }}" data-email="{{ row.user.email }}" data-mobile="{{ row.user.profile.phone|default:'-' }}" data-department="{{ row.user.profile.department|default:'-' }}" data-class-name="{{ row.user.profile.class_name|default:'-' }}" data-team="{% if row.team %}{{ row.team.sport.name }} - {{ row.team.get_gender_display }} {{ row.team.name }}{% else %}Not assigned{% endif %}" data-status="{% if row.membership %}{{ row.is_active|yesno:'Active,Inactive' }}{% else %}Approved{% endif %}"><i class="bi bi-eye"></i> View</button></li>
+                    <li><button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#studentViewModal" data-name="{{ row.user.get_full_name|default:row.user.username }}" data-email="{{ row.user.email }}" data-mobile="{{ row.user.profile.phone|default:'-' }}" data-register-no="{{ row.user.profile.register_no|default:'-' }}" data-department="{{ row.user.profile.department|default:'-' }}" data-class-name="{{ row.user.profile.class_name|default:'-' }}" data-team="{% if row.team %}{{ row.team.sport.name }} - {{ row.team.get_gender_display }} {{ row.team.name }}{% else %}Not assigned{% endif %}" data-status="{% if row.membership %}{{ row.is_active|yesno:'Active,Inactive' }}{% else %}Approved{% endif %}"><i class="bi bi-eye"></i> View</button></li>
                     <li><a class="dropdown-item" href="{% url 'member_detail' row.user.pk %}"><i class="bi bi-card-list"></i> More Details</a></li>
-                    <li><button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#memberModal" data-mode="edit" data-id="{% if row.membership %}{{ row.membership.pk }}{% endif %}" data-user-id="{{ row.user.pk }}" data-name="{{ row.user.get_full_name|default:row.user.username }}" data-email="{{ row.user.email }}" data-mobile="{{ row.user.profile.phone }}" data-department="{{ row.user.profile.department }}" data-class-name="{{ row.user.profile.class_name }}" data-team="{% if row.team %}{{ row.team.pk }}{% endif %}" data-active="{{ row.is_active|yesno:'true,false' }}"><i class="bi bi-pencil"></i> Edit</button></li>
+                    <li><button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#memberModal" data-mode="edit" data-id="{% if row.membership %}{{ row.membership.pk }}{% endif %}" data-user-id="{{ row.user.pk }}" data-name="{{ row.user.get_full_name|default:row.user.username }}" data-email="{{ row.user.email }}" data-mobile="{{ row.user.profile.phone }}" data-register-no="{{ row.user.profile.register_no }}" data-department="{{ row.user.profile.department }}" data-class-name="{{ row.user.profile.class_name }}" data-team="{% if row.team %}{{ row.team.pk }}{% endif %}" data-active="{{ row.is_active|yesno:'true,false' }}"><i class="bi bi-pencil"></i> Edit</button></li>
                     <li><button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#memberConfirmModal" data-action="{% if row.is_active %}deactivate{% else %}activate{% endif %}" data-id="{% if row.membership %}{{ row.membership.pk }}{% endif %}" data-user-id="{{ row.user.pk }}" data-title="{% if row.is_active %}Deactivate{% else %}Activate{% endif %} Student" data-message="Confirm this student status change."><i class="bi bi-toggle-off"></i> {% if row.is_active %}Deactivate{% else %}Activate{% endif %}</button></li>
                     <li><button class="dropdown-item text-danger" data-bs-toggle="modal" data-bs-target="#memberConfirmModal" data-action="delete" data-id="{% if row.membership %}{{ row.membership.pk }}{% endif %}" data-user-id="{{ row.user.pk }}" data-title="Delete Student" data-message="{% if row.membership %}This removes the student from this team.{% else %}This deletes the student record.{% endif %}"><i class="bi bi-trash"></i> Delete</button></li>
                   </ul>
@@ -68,7 +72,7 @@
             </td>
           </tr>
         {% empty %}
-          <tr><td colspan="8" class="empty-state">No students added yet.</td></tr>
+          <tr><td colspan="9" class="empty-state">No students added yet.</td></tr>
         {% endfor %}
       </tbody>
     </table>
@@ -88,6 +92,7 @@
           <div class="col-md-6"><label class="form-label">Student Name</label><input class="form-control" name="student_name" data-field="name" required></div>
           <div class="col-md-6"><label class="form-label">Student Email</label><input class="form-control" type="email" name="student_email" data-field="email" required></div>
           <div class="col-md-6"><label class="form-label">Mobile Number</label><input class="form-control" name="mobile_number" data-field="mobile" inputmode="numeric" pattern="[0-9]{10}" maxlength="10" placeholder="10 digit mobile number"></div>
+          <div class="col-md-6"><label class="form-label">Reg No</label><input class="form-control" name="register_no" data-field="register-no"></div>
           <div class="col-md-6"><label class="form-label">Department</label><input class="form-control" name="department" data-field="department"></div>
           <div class="col-md-6"><label class="form-label">Class</label><input class="form-control" name="class_name" data-field="class-name"></div>
           <div class="col-12"><label class="form-label">Team</label><select class="form-select" name="team" data-field="team"><option value="">Not assigned yet</option>{% for team in teams %}<option value="{{ team.pk }}">{{ team.sport.name }} - {{ team.get_gender_display }} {{ team.name }}</option>{% endfor %}</select></div>
@@ -107,6 +112,7 @@
         <div><span>Name</span><strong data-field="view-name"></strong></div>
         <div><span>Email</span><strong data-field="view-email"></strong></div>
         <div><span>Mobile</span><strong data-field="view-mobile"></strong></div>
+        <div><span>Reg No</span><strong data-field="view-register-no"></strong></div>
         <div><span>Department</span><strong data-field="view-department"></strong></div>
         <div><span>Class</span><strong data-field="view-class-name"></strong></div>
         <div><span>Team</span><strong data-field="view-team"></strong></div>
@@ -130,6 +136,9 @@
     </form>
   </div>
 </div>
+{% if user.is_superuser or user.profile.role == 'SUPER_ADMIN' or user.profile.role == 'SUB_ADMIN' %}
+  {% include "partials/bulk_upload_modal.html" with bulk_kind="students" bulk_title="Students" %}
+{% endif %}
 {% endblock %}
 
 {% block scripts %}
@@ -140,7 +149,7 @@
     const mode = b?.dataset.mode || 'create';
     modal.querySelector('.modal-title').textContent = mode === 'edit' ? 'Edit Student' : 'Add Student';
     modal.querySelector('[data-field="action"]').value = mode === 'edit' ? 'update' : 'create';
-    ['id','userId','name','email','mobile','department','className','team'].forEach(key => {
+    ['id','userId','name','email','mobile','registerNo','department','className','team'].forEach(key => {
       const field = modal.querySelector(`[data-field="${key.replace(/[A-Z]/g, m => '-' + m.toLowerCase())}"]`);
       if (field) field.value = b?.dataset[key] || '';
     });
@@ -149,7 +158,7 @@
   document.getElementById('studentViewModal')?.addEventListener('show.bs.modal', event => {
     const b = event.relatedTarget;
     const modal = event.currentTarget;
-    ['name','email','mobile','department','className','team','status'].forEach(key => {
+    ['name','email','mobile','registerNo','department','className','team','status'].forEach(key => {
       const field = modal.querySelector(`[data-field="view-${key.replace(/[A-Z]/g, m => '-' + m.toLowerCase())}"]`);
       if (field) field.textContent = b?.dataset[key] || '-';
     });

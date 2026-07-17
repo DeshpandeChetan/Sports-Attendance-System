@@ -7,9 +7,14 @@
     <h1>Sports</h1>
     <p class="text-muted mb-0">Create and manage the sports offered by the department.</p>
   </div>
-  <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#sportModal" data-mode="create">
-    <i class="bi bi-plus-lg"></i> Add Sport
-  </button>
+  <div class="d-flex flex-wrap gap-2">
+    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#sportModal" data-mode="create">
+      <i class="bi bi-plus-lg"></i> Add Sport
+    </button>
+    <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#bulkUploadModal">
+      <i class="bi bi-upload"></i> Bulk Upload
+    </button>
+  </div>
 </div>
 
 <section class="panel">
@@ -111,6 +116,8 @@
     </form>
   </div>
 </div>
+
+{% include "partials/bulk_upload_modal.html" with bulk_kind="sports" bulk_title="Sports" %}
 {% endblock %}
 
 {% block scripts %}
