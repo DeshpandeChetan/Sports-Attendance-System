@@ -1,5 +1,6 @@
 from django import forms
 from django.contrib.auth import get_user_model
+from django.db.models import Q
 from django.utils import timezone
 from datetime import datetime, time
 
@@ -34,6 +35,22 @@ class TeamForm(BootstrapFormMixin, forms.ModelForm):
     class Meta:
         model = Team
         fields = ["sport", "name", "team_type", "gender", "captain", "vice_captain", "coordinator", "is_active"]
+
+    def clean(self):
+        cleaned = super().clean()
+        captain = cleaned.get("captain")
+        vice_captain = cleaned.get("vice_captain")
+        if captain and vice_captain and captain == vice_captain:
+            self.add_error("vice_captain", "Captain and Vice Captain cannot be the same student.")
+        for field_name, leader in (("captain", captain), ("vice_captain", vice_captain)):
+            if not leader:
+                continue
+            existing = Team.objects.filter(Q(captain=leader) | Q(vice_captain=leader))
+            if self.instance and self.instance.pk:
+                existing = existing.exclude(pk=self.instance.pk)
+            if existing.exists():
+                self.add_error(field_name, "This student is already Captain or Vice Captain of another team.")
+        return cleaned
 
 
 class MembershipForm(BootstrapFormMixin, forms.ModelForm):

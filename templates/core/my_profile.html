@@ -18,6 +18,18 @@
     </div>
   </div>
 
+  <div class="profile-association mb-4">
+    <div class="metric metric-sports mini"><i class="bi bi-trophy"></i><span>Associated Sports</span><strong>{{ associated_sports_count }}</strong></div>
+    <div class="metric metric-teams mini"><i class="bi bi-diagram-3"></i><span>Associated Teams</span><strong>{{ associated_team_count }}</strong></div>
+    <div class="profile-team-list">
+      {% for membership in profile_memberships %}
+        <span class="badge soft-badge">{{ membership.team.sport.name }} - {{ membership.team.get_gender_display }} {{ membership.team.name }}</span>
+      {% empty %}
+        <span class="text-muted">No sports or teams associated yet.</span>
+      {% endfor %}
+    </div>
+  </div>
+
   <form method="post" enctype="multipart/form-data" class="row g-3">
     {% csrf_token %}
     <div class="col-12">{{ form.profile_image.label_tag }}{{ form.profile_image }}{% if form.profile_image.errors %}<div class="text-danger small mt-1">{{ form.profile_image.errors|striptags }}</div>{% endif %}</div>

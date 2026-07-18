@@ -108,9 +108,10 @@ img.avatar {
 
 .dashboard-welcome {
   color: var(--secondary);
-  font-size: 1.15rem;
+  font-size: clamp(1.8rem, 4vw, 3rem);
   font-weight: 800;
-  margin: .15rem 0 .25rem;
+  line-height: 1.05;
+  margin: .2rem 0 .35rem;
 }
 
 .profile-hero {
@@ -146,6 +147,28 @@ img.avatar {
   font-size: clamp(1.5rem, 3vw, 2.2rem);
   font-weight: 800;
   margin: 0;
+}
+
+.profile-association {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(2, minmax(0, 180px)) minmax(0, 1fr);
+}
+
+.profile-association .metric {
+  box-shadow: none;
+  min-height: 112px;
+}
+
+.profile-team-list {
+  align-content: start;
+  background: rgba(231, 235, 241, .58);
+  border: 1px solid rgba(0, 51, 102, .12);
+  border-radius: 1rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+  padding: 1rem;
 }
 
 .app-shell {
@@ -388,7 +411,71 @@ img.avatar {
 }
 
 .metric {
-  border-top: 4px solid var(--secondary);
+  border: 0;
+  min-height: 132px;
+  position: relative;
+}
+
+.metric i {
+  align-items: center;
+  border-radius: .75rem;
+  display: inline-flex;
+  font-size: 1.15rem;
+  height: 42px;
+  justify-content: center;
+  margin-bottom: .85rem;
+  width: 42px;
+}
+
+.metric-sports,
+.metric-attendance {
+  background: #eef4ff;
+}
+
+.metric-teams,
+.metric-male {
+  background: #e9f7ef;
+}
+
+.metric-students {
+  background: #e8f3ff;
+}
+
+.metric-trainers,
+.metric-female {
+  background: #fff0f1;
+}
+
+.metric-feedback {
+  background: #f4efff;
+}
+
+.metric-sports i,
+.metric-attendance i {
+  background: #cfe2ff;
+  color: var(--secondary);
+}
+
+.metric-teams i,
+.metric-male i {
+  background: #bff7ca;
+  color: #0f8a4b;
+}
+
+.metric-students i {
+  background: #d7ecff;
+  color: var(--primary);
+}
+
+.metric-trainers i,
+.metric-female i {
+  background: #ffd7d7;
+  color: var(--danger);
+}
+
+.metric-feedback i {
+  background: #e4d7ff;
+  color: #5b35a5;
 }
 
 .metric-grid {
@@ -604,6 +691,82 @@ img.avatar {
   overflow-y: visible;
 }
 
+.mobile-table-cards {
+  display: none;
+}
+
+.mobile-data-card {
+  background: #ffffff;
+  border: 1px solid rgba(0, 51, 102, .12);
+  border-left: 4px solid var(--secondary);
+  border-radius: 1rem;
+  box-shadow: 0 .75rem 1.8rem rgba(0, 51, 102, .12);
+  overflow: hidden;
+  padding: 1rem;
+}
+
+.mobile-card-head {
+  color: var(--ink);
+  font-size: 1rem;
+  font-weight: 800;
+  margin-bottom: .75rem;
+}
+
+.mobile-card-head .text-muted,
+.mobile-card-field .text-muted {
+  color: #4c5968 !important;
+}
+
+.mobile-card-grid {
+  display: grid;
+  gap: .65rem;
+}
+
+.mobile-card-field {
+  border-top: 1px solid rgba(0, 51, 102, .1);
+  display: grid;
+  gap: .2rem;
+  padding-top: .65rem;
+}
+
+.mobile-card-field span {
+  color: var(--neutral);
+  font-size: .68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.mobile-card-field strong {
+  color: var(--ink);
+  font-size: .9rem;
+  font-weight: 700;
+}
+
+.mobile-card-actions {
+  border-top: 1px solid rgba(0, 51, 102, .1);
+  padding-top: .75rem;
+}
+
+.mobile-card-actions .dropdown,
+.mobile-card-actions .btn,
+.mobile-card-actions form {
+  width: 100%;
+}
+
+.mobile-card-actions .dropdown-toggle,
+.mobile-card-actions > .btn,
+.mobile-card-actions form .btn {
+  justify-content: center;
+  width: 100%;
+}
+
+.mobile-empty-card {
+  border-left-color: var(--neutral);
+  color: var(--neutral);
+  font-weight: 700;
+  text-align: center;
+}
+
 .table-responsive .dropdown {
   position: static;
 }
@@ -714,6 +877,13 @@ body.modal-open {
   font-size: 1.05rem;
   font-weight: 800;
   margin: .45rem 0 0;
+}
+
+.session-status-badge {
+  align-self: flex-start;
+  flex: 0 0 auto;
+  white-space: nowrap;
+  width: fit-content;
 }
 
 .session-meta {
@@ -1087,6 +1257,42 @@ body.modal-open {
   .metric strong {
     font-size: 1.15rem;
   }
+
+  .profile-association {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .profile-team-list {
+    grid-column: 1 / -1;
+  }
+
+  .table-tools {
+    grid-template-columns: 1fr;
+  }
+
+  .table-responsive {
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    overflow: visible;
+  }
+
+  .table-responsive table.data-table {
+    display: none;
+  }
+
+  .mobile-table-cards {
+    display: grid;
+    gap: .85rem;
+  }
+
+  .mobile-data-card .dropdown {
+    position: relative;
+  }
+
+  .mobile-data-card .dropdown-menu {
+    width: 100%;
+  }
 }
 
 @media (max-width: 575.98px) {
@@ -1112,6 +1318,20 @@ body.modal-open {
   .session-card {
     border-radius: 1rem;
     padding: .85rem;
+  }
+
+  .dashboard-welcome {
+    font-size: 2rem;
+  }
+
+  .metric {
+    min-height: 118px;
+  }
+
+  .metric i {
+    height: 38px;
+    margin-bottom: .65rem;
+    width: 38px;
   }
 
   .session-meta {

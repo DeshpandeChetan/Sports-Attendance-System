@@ -32,7 +32,7 @@
             <span class="text-muted small"> - {{ session.team.get_gender_display }} {{ session.team.name }}</span>
             <h3>{{ session.title|default:"Practice session" }}</h3>
           </div>
-          {% if session.attendance_submitted %}<span class="badge text-bg-success">Completed</span>{% else %}<span class="badge text-bg-warning">Pending</span>{% endif %}
+          {% if session.attendance_submitted %}<span class="badge text-bg-success session-status-badge">Completed</span>{% else %}<span class="badge text-bg-warning session-status-badge">Pending</span>{% endif %}
         </div>
         <div class="session-meta">
           <span><i class="bi bi-calendar"></i> {{ session.start_at|date:"d M Y" }}</span>

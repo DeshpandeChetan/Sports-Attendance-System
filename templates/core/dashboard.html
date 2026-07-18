@@ -12,15 +12,15 @@
 
 <div class="metric-grid {% if user.is_superuser or user.profile.role == 'SUPER_ADMIN' or user.profile.role == 'SUB_ADMIN' %}admin-metric-grid{% endif %}">
   {% if user.is_superuser or user.profile.role == 'SUPER_ADMIN' or user.profile.role == 'SUB_ADMIN' %}
-    <div class="metric"><span>Sports</span><strong>{{ admin_stats.sports }}</strong></div>
-    <div class="metric"><span>Teams</span><strong>{{ admin_stats.teams }}</strong></div>
-    <div class="metric"><span>Students</span><strong>{{ admin_stats.students }}</strong></div>
-    <div class="metric"><span>Trainers</span><strong>{{ admin_stats.trainers }}</strong></div>
-    <div class="metric"><span>Male Teams</span><strong>{{ admin_stats.male_teams }}</strong></div>
-    <div class="metric"><span>Female Teams</span><strong>{{ admin_stats.female_teams }}</strong></div>
+    <div class="metric metric-sports"><i class="bi bi-trophy"></i><span>Sports</span><strong>{{ admin_stats.sports }}</strong></div>
+    <div class="metric metric-teams"><i class="bi bi-diagram-3"></i><span>Teams</span><strong>{{ admin_stats.teams }}</strong></div>
+    <div class="metric metric-students"><i class="bi bi-people"></i><span>Students</span><strong>{{ admin_stats.students }}</strong></div>
+    <div class="metric metric-trainers"><i class="bi bi-person-workspace"></i><span>Trainers</span><strong>{{ admin_stats.trainers }}</strong></div>
+    <div class="metric metric-male"><i class="bi bi-gender-male"></i><span>Male Teams</span><strong>{{ admin_stats.male_teams }}</strong></div>
+    <div class="metric metric-female"><i class="bi bi-gender-female"></i><span>Female Teams</span><strong>{{ admin_stats.female_teams }}</strong></div>
   {% endif %}
-  <div class="metric"><span>Attendance</span><strong>{% if attendance_percent != None %}{{ attendance_percent }}%{% else %}No records{% endif %}</strong></div>
-  <div class="metric"><span>Unread Feedback</span><strong>{{ unread_feedback }}</strong></div>
+  <div class="metric metric-attendance"><i class="bi bi-clipboard-check"></i><span>Attendance</span><strong>{% if attendance_percent != None %}{{ attendance_percent }}%{% else %}No records{% endif %}</strong></div>
+  <div class="metric metric-feedback"><i class="bi bi-chat-left-text"></i><span>Unread Feedback</span><strong>{{ unread_feedback }}</strong></div>
 </div>
 
 <div class="row g-4">

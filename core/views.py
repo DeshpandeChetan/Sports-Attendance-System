@@ -399,14 +399,32 @@ def import_teams_from_file(uploaded_file):
         sport, _ = Sport.objects.get_or_create(name=sport_name, defaults={"is_active": True})
         team_type = type_map.get(str(row.get("team_type") or "University").strip().lower(), Team.TeamType.UNIVERSITY)
         gender = gender_map.get(str(row.get("gender") or "Male").strip().lower(), Team.TeamGender.MALE)
+        captain = find_user_by_email(row.get("captain_email"))
+        vice_captain = find_user_by_email(row.get("vice_captain_email"))
+        current_team = Team.objects.filter(sport=sport, name=team_name, team_type=team_type, gender=gender).first()
+        if captain and vice_captain and captain == vice_captain:
+            errors.append(f"Row {index}: Captain and Vice Captain cannot be the same student.")
+            continue
+        leader_conflict = False
+        for label, leader in (("Captain", captain), ("Vice Captain", vice_captain)):
+            if not leader:
+                continue
+            existing = Team.objects.filter(Q(captain=leader) | Q(vice_captain=leader))
+            if current_team:
+                existing = existing.exclude(pk=current_team.pk)
+            if existing.exists():
+                errors.append(f"Row {index}: {label} is already Captain or Vice Captain of another team.")
+                leader_conflict = True
+        if leader_conflict:
+            continue
         Team.objects.update_or_create(
             sport=sport,
             name=team_name,
             team_type=team_type,
             gender=gender,
             defaults={
-                "captain": find_user_by_email(row.get("captain_email")),
-                "vice_captain": find_user_by_email(row.get("vice_captain_email")),
+                "captain": captain,
+                "vice_captain": vice_captain,
                 "coordinator": find_user_by_email(row.get("trainer_email")),
                 "is_active": truthy_cell(row.get("status") or row.get("active"), True),
             },
@@ -911,7 +929,14 @@ def my_profile(request):
         form.save()
         messages.success(request, "Profile updated.")
         return redirect("my_profile")
-    return render(request, "core/my_profile.html", {"form": form})
+    profile_memberships = Membership.objects.filter(user=request.user, is_active=True).select_related("team", "team__sport")
+    associated_sports = Sport.objects.filter(teams__memberships__user=request.user, teams__memberships__is_active=True).distinct()
+    return render(request, "core/my_profile.html", {
+        "form": form,
+        "profile_memberships": profile_memberships,
+        "associated_sports_count": associated_sports.count(),
+        "associated_team_count": profile_memberships.count(),
+    })
 
 
 @login_required
