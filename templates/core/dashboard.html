@@ -4,6 +4,7 @@
 <div class="page-head">
   <div>
     <p class="eyebrow">Dashboard</p>
+    <p class="dashboard-welcome">Welcome!, {{ user.get_full_name|default:user.email }}</p>
     <h1>Sports operations</h1>
   </div>
   <a class="btn btn-primary" href="{% url 'sessions' %}">Schedule Practice</a>

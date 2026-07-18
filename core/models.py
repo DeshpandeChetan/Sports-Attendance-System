@@ -31,6 +31,7 @@ class UserProfile(TimeStampedModel):
     address = models.TextField(blank=True)
     register_no = models.CharField(max_length=60, blank=True)
     gender = models.CharField(max_length=30, blank=True)
+    profile_image = models.ImageField(upload_to="profile_images/", blank=True, null=True)
 
     def __str__(self):
         return f"{self.user.get_full_name() or self.user.username} ({self.get_role_display()})"

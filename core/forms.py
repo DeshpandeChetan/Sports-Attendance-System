@@ -81,10 +81,11 @@ class ProfileForm(BootstrapFormMixin, forms.ModelForm):
 
     class Meta:
         model = UserProfile
-        fields = ["department", "class_name", "phone", "dob", "address", "register_no", "gender"]
+        fields = ["profile_image", "department", "class_name", "phone", "dob", "address", "register_no", "gender"]
         widgets = {
             "dob": forms.DateInput(attrs={"type": "date"}),
             "address": forms.Textarea(attrs={"rows": 3}),
+            "profile_image": forms.ClearableFileInput(attrs={"accept": "image/*"}),
         }
 
     def __init__(self, *args, **kwargs):
@@ -93,6 +94,12 @@ class ProfileForm(BootstrapFormMixin, forms.ModelForm):
         self.fields["first_name"].initial = self.user_instance.first_name
         self.fields["last_name"].initial = self.user_instance.last_name
         self.fields["email"].initial = self.user_instance.email
+
+    def clean_profile_image(self):
+        image = self.cleaned_data.get("profile_image")
+        if image and hasattr(image, "content_type") and not image.content_type.startswith("image/"):
+            raise forms.ValidationError("Only image files can be uploaded.")
+        return image
 
     def save(self, commit=True):
         profile = super().save(commit=False)

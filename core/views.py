@@ -890,8 +890,7 @@ def trainers_list(request):
 @role_required(*ADMIN_ROLES)
 def settings_page(request):
     inactive_users = User.objects.filter(is_active=False).select_related("profile").order_by("first_name", "last_name", "email")
-    notification_count = Notification.objects.filter(user=request.user).count()
-    return render(request, "core/settings.html", {"inactive_users": inactive_users, "notification_count": notification_count})
+    return render(request, "core/settings.html", {"inactive_users": inactive_users})
 
 
 @login_required
@@ -907,7 +906,7 @@ def restore_user(request, pk):
 @login_required
 def my_profile(request):
     profile, _ = UserProfile.objects.get_or_create(user=request.user)
-    form = ProfileForm(request.POST or None, instance=profile, user_instance=request.user)
+    form = ProfileForm(request.POST or None, request.FILES or None, instance=profile, user_instance=request.user)
     if request.method == "POST" and form.is_valid():
         form.save()
         messages.success(request, "Profile updated.")

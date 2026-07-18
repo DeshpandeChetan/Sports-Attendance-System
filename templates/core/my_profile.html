@@ -6,8 +6,21 @@
 </div>
 
 <section class="panel">
-  <form method="post" class="row g-3">
+  <div class="profile-hero mb-4">
+    {% if user.profile.profile_image %}
+      <img src="{{ user.profile.profile_image.url }}" alt="{{ user.get_full_name|default:user.email }}">
+    {% else %}
+      <span>{{ user.first_name|first|upper|default:"U" }}</span>
+    {% endif %}
+    <div>
+      <p class="eyebrow mb-1">Profile</p>
+      <h2>Hii, {{ user.get_full_name|default:user.email }}</h2>
+    </div>
+  </div>
+
+  <form method="post" enctype="multipart/form-data" class="row g-3">
     {% csrf_token %}
+    <div class="col-12">{{ form.profile_image.label_tag }}{{ form.profile_image }}{% if form.profile_image.errors %}<div class="text-danger small mt-1">{{ form.profile_image.errors|striptags }}</div>{% endif %}</div>
     <div class="col-md-6">{{ form.first_name.label_tag }}{{ form.first_name }}</div>
     <div class="col-md-6">{{ form.last_name.label_tag }}{{ form.last_name }}</div>
     <div class="col-md-6">{{ form.email.label_tag }}{{ form.email }}</div>
