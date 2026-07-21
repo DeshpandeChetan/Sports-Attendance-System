@@ -36,6 +36,16 @@ class TeamForm(BootstrapFormMixin, forms.ModelForm):
         model = Team
         fields = ["sport", "name", "team_type", "gender", "captain", "vice_captain", "coordinator", "is_active"]
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        student_roles = [UserProfile.Role.MEMBER, UserProfile.Role.CAPTAIN, UserProfile.Role.VICE_CAPTAIN]
+        trainer_roles = [UserProfile.Role.TRAINER, UserProfile.Role.COORDINATOR]
+        student_qs = User.objects.filter(is_active=True, profile__role__in=student_roles).order_by("first_name", "last_name", "email")
+        trainer_qs = User.objects.filter(is_active=True, profile__role__in=trainer_roles).order_by("first_name", "last_name", "email")
+        self.fields["captain"].queryset = student_qs
+        self.fields["vice_captain"].queryset = student_qs
+        self.fields["coordinator"].queryset = trainer_qs
+
     def clean(self):
         cleaned = super().clean()
         captain = cleaned.get("captain")
@@ -190,7 +200,7 @@ class DelegateForm(BootstrapFormMixin, forms.Form):
 
 
 class AttendanceEditForm(BootstrapFormMixin, forms.ModelForm):
-    reason = forms.CharField(max_length=255)
+    reason = forms.CharField(max_length=255, required=False)
 
     class Meta:
         model = AttendanceRecord

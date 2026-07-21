@@ -160,6 +160,11 @@ def notify_common_action(actor, title, message, target_url):
     create_notifications(User.objects.filter(is_active=True), title, message, actor=actor, target_url=target_url)
 
 
+def attendance_lock_active(session, now=None):
+    now = now or timezone.now()
+    return bool(session.attendance_started_by and session.attendance_lock_expires_at and session.attendance_lock_expires_at > now)
+
+
 def attendance_percentage(user):
     total = AttendanceRecord.objects.filter(member=user).count()
     if total == 0:
@@ -259,6 +264,13 @@ def find_user_by_email(email):
     if not email:
         return None
     return User.objects.filter(email__iexact=str(email).strip()).first()
+
+
+def is_student_leader_candidate(user):
+    if not user:
+        return True
+    role = getattr(getattr(user, "profile", None), "role", None)
+    return role in {UserProfile.Role.MEMBER, UserProfile.Role.CAPTAIN, UserProfile.Role.VICE_CAPTAIN}
 
 
 def find_team_by_label(label):
@@ -402,6 +414,12 @@ def import_teams_from_file(uploaded_file):
         captain = find_user_by_email(row.get("captain_email"))
         vice_captain = find_user_by_email(row.get("vice_captain_email"))
         current_team = Team.objects.filter(sport=sport, name=team_name, team_type=team_type, gender=gender).first()
+        if not is_student_leader_candidate(captain):
+            errors.append(f"Row {index}: Captain must be a student, not a trainer/admin.")
+            continue
+        if not is_student_leader_candidate(vice_captain):
+            errors.append(f"Row {index}: Vice Captain must be a student, not a trainer/admin.")
+            continue
         if captain and vice_captain and captain == vice_captain:
             errors.append(f"Row {index}: Captain and Vice Captain cannot be the same student.")
             continue
@@ -701,12 +719,18 @@ def teams_list(request):
             messages.success(request, f"{team_name} deleted.")
         return redirect("teams")
 
-    teams = Team.objects.select_related("sport", "captain", "vice_captain", "coordinator")
+    teams = Team.objects.select_related("sport", "captain", "vice_captain", "coordinator").prefetch_related("memberships__user", "memberships__user__profile")
     if not is_admin_user(request.user):
         teams = teams.filter(Q(memberships__user=request.user) | Q(captain=request.user) | Q(vice_captain=request.user) | Q(coordinator=request.user)).distinct()
-    users = User.objects.all().order_by("first_name", "last_name", "username")
+    teams = list(teams)
+    for team in teams:
+        team.active_memberships = [membership for membership in team.memberships.all() if membership.is_active]
+    student_roles = [UserProfile.Role.MEMBER, UserProfile.Role.CAPTAIN, UserProfile.Role.VICE_CAPTAIN]
+    trainer_roles = [UserProfile.Role.TRAINER, UserProfile.Role.COORDINATOR]
+    users = User.objects.filter(is_active=True, profile__role__in=student_roles).order_by("first_name", "last_name", "username")
+    trainer_users = User.objects.filter(is_active=True, profile__role__in=trainer_roles).order_by("first_name", "last_name", "username")
     sports = Sport.objects.filter(is_active=True).order_by("name")
-    return render(request, "core/teams.html", {"teams": teams, "users": users, "sports": sports})
+    return render(request, "core/teams.html", {"teams": teams, "users": users, "trainer_users": trainer_users, "sports": sports})
 
 
 @login_required
@@ -1034,8 +1058,14 @@ def sessions_list(request):
     if not is_admin_user(request.user):
         team_qs = team_qs.filter(coordinator=request.user)
     can_schedule_any = is_admin_user(request.user) or (role_for(request.user) in TRAINER_ROLES and team_qs.exists())
+    now = timezone.now()
+    session_list = list(sessions)
+    for item in session_list:
+        item.can_manage_for_user = can_manage_team(request.user, item.team)
+        item.can_take_for_user = can_take_attendance(request.user, item)
+        item.has_active_attendance_lock = attendance_lock_active(item, now)
     venues = Venue.objects.filter(is_active=True).order_by("name")
-    return render(request, "core/sessions.html", {"sessions": sessions, "form": form, "teams": team_qs, "venues": venues, "can_schedule_any": can_schedule_any})
+    return render(request, "core/sessions.html", {"sessions": session_list, "form": form, "teams": team_qs, "venues": venues, "can_schedule_any": can_schedule_any})
 
 
 @login_required
@@ -1090,6 +1120,26 @@ def delegate_attendance(request, pk):
 
 
 @login_required
+def cancel_attendance_lock(request, pk):
+    session = get_object_or_404(Session, pk=pk)
+    if request.method != "POST":
+        return redirect("sessions")
+    if not can_take_attendance(request.user, session):
+        messages.error(request, "You cannot cancel the attendance lock for this session.")
+        return redirect("sessions")
+    if session.attendance_submitted:
+        messages.warning(request, "Attendance has already been submitted for this session.")
+        return redirect("attendance_detail", pk=session.pk)
+    session.attendance_started_by = None
+    session.attendance_started_by_role = ""
+    session.attendance_started_at = None
+    session.attendance_lock_expires_at = None
+    session.save(update_fields=["attendance_started_by", "attendance_started_by_role", "attendance_started_at", "attendance_lock_expires_at", "updated_at"])
+    messages.success(request, "Attendance lock cancelled. Another authorized user can take attendance now.")
+    return redirect("sessions")
+
+
+@login_required
 def take_attendance(request, pk):
     session = get_object_or_404(Session.objects.select_related("team"), pk=pk)
     if not can_take_attendance(request.user, session):
@@ -1135,24 +1185,31 @@ def take_attendance(request, pk):
             locked_session.submitted_by = request.user
             locked_session.submitted_by_role = role_label(request.user)
             locked_session.submitted_at = timezone.now()
+            locked_session.attendance_started_by = None
+            locked_session.attendance_started_by_role = ""
+            locked_session.attendance_started_at = None
             locked_session.attendance_lock_expires_at = None
-            locked_session.save(update_fields=["attendance_submitted", "submitted_by", "submitted_by_role", "submitted_at", "attendance_lock_expires_at", "updated_at"])
+            locked_session.save(update_fields=["attendance_submitted", "submitted_by", "submitted_by_role", "submitted_at", "attendance_started_by", "attendance_started_by_role", "attendance_started_at", "attendance_lock_expires_at", "updated_at"])
         messages.success(request, "Attendance submitted.")
         return redirect("attendance_detail", pk=session.pk)
-    return render(request, "core/take_attendance.html", {"session": session, "members": members, "statuses": AttendanceRecord.Status.choices})
+    return render(request, "core/take_attendance.html", {"session": session, "members": members, "statuses": AttendanceRecord.Status.choices, "can_cancel_lock": can_take_attendance(request.user, session)})
 
 
 @login_required
-def attendance_detail(request, pk):
+def attendance_detail(request, pk, export_type=None):
     session = get_object_or_404(visible_sessions(request.user), pk=pk)
     records = session.attendance_records.select_related("member", "marked_by")
+    if export_type == "excel":
+        return export_excel(records)
+    if export_type == "pdf":
+        return export_pdf(records)
     return render(request, "core/attendance_detail.html", {"session": session, "records": records})
 
 
 @login_required
 @role_required(*ADMIN_ROLES)
 def edit_attendance(request, pk):
-    record = get_object_or_404(AttendanceRecord, pk=pk)
+    record = get_object_or_404(AttendanceRecord.objects.select_related("member", "session"), pk=pk)
     old_status = record.status
     form = AttendanceEditForm(request.POST or None, instance=record)
     if request.method == "POST" and form.is_valid():
@@ -1163,11 +1220,12 @@ def edit_attendance(request, pk):
                 edited_by=request.user,
                 old_status=old_status,
                 new_status=updated.status,
-                reason=form.cleaned_data["reason"],
+                reason=form.cleaned_data.get("reason") or "No reason provided",
             )
         messages.success(request, "Attendance updated with audit history.")
         return redirect("attendance_detail", pk=record.session.pk)
-    return render(request, "core/form.html", {"form": form, "title": "Edit Attendance", "back_url": reverse("attendance_detail", args=[record.session.pk])})
+    student_name = record.member.get_full_name() or record.member.email or record.member.username
+    return render(request, "core/form.html", {"form": form, "title": f"Edit Attendance - {student_name}", "back_url": reverse("attendance_detail", args=[record.session.pk])})
 
 
 @login_required

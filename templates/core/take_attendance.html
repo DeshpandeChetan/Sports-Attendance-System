@@ -2,6 +2,12 @@
 {% block content %}
 <div class="page-head">
   <div><p class="eyebrow">Attendance</p><h1>{{ session.title }}</h1><p class="text-muted mb-0">{{ session.team.sport.name }} · {{ session.team.get_gender_display }} {{ session.team.name }} · {{ session.start_at|date:"d M Y, h:i A" }}</p></div>
+  {% if can_cancel_lock %}
+    <form method="post" action="{% url 'cancel_attendance_lock' session.pk %}">
+      {% csrf_token %}
+      <button class="btn btn-outline-secondary" type="submit"><i class="bi bi-unlock"></i> Cancel Lock</button>
+    </form>
+  {% endif %}
 </div>
 <form method="post">
   {% csrf_token %}

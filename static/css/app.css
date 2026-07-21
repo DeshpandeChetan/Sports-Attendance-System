@@ -834,6 +834,32 @@ body.modal-open {
   font-weight: 600;
 }
 
+.team-player-grid {
+  display: grid;
+  gap: .85rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.team-player-card {
+  background: rgba(255, 255, 255, .72);
+  border: 1px solid rgba(0, 51, 102, .14);
+  border-left: 4px solid var(--secondary);
+  border-radius: .9rem;
+  display: grid;
+  gap: .75rem;
+  padding: .9rem;
+}
+
+.team-player-card strong,
+.team-player-card small {
+  display: block;
+}
+
+.team-player-card small {
+  color: var(--neutral);
+  overflow-wrap: anywhere;
+}
+
 .detail-list {
   display: grid;
   gap: .75rem;
@@ -1266,6 +1292,10 @@ body.modal-open {
     grid-column: 1 / -1;
   }
 
+  .team-player-grid {
+    grid-template-columns: 1fr;
+  }
+
   .table-tools {
     grid-template-columns: 1fr;
   }
@@ -1340,5 +1370,80 @@ body.modal-open {
 
   .login-panel {
     margin: 0;
+  }
+}
+
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  .app-topbar,
+  .sidebar,
+  .offcanvas,
+  .mobile-bottom-nav,
+  .app-breadcrumb,
+  .alert,
+  .table-tools,
+  .mobile-table-cards,
+  .no-print {
+    display: none !important;
+  }
+
+  .app-shell,
+  .content {
+    display: block !important;
+    min-height: auto !important;
+    padding: 0 !important;
+  }
+
+  .attendance-print-area,
+  .attendance-print-area .panel,
+  .attendance-print-area .table-responsive {
+    background: #ffffff !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    color: #000000 !important;
+    overflow: visible !important;
+    padding: 0 !important;
+  }
+
+  .attendance-print-head {
+    border-bottom: 2px solid #000000;
+    margin-bottom: 14px;
+    padding-bottom: 10px;
+  }
+
+  .attendance-print-area .detail-list {
+    grid-template-columns: repeat(3, 1fr);
+    margin-bottom: 14px;
+  }
+
+  .attendance-print-area .detail-list div {
+    background: #ffffff !important;
+    border: 1px solid #999999;
+  }
+
+  .attendance-print-area table.data-table {
+    display: table !important;
+    width: 100% !important;
+  }
+
+  .attendance-print-area .data-table th,
+  .attendance-print-area .data-table td {
+    border: 1px solid #777777 !important;
+    color: #000000 !important;
+    padding: 6px 8px !important;
+  }
+
+  .attendance-print-area .data-table thead th {
+    background: #eeeeee !important;
+    color: #000000 !important;
+  }
+
+  .attendance-print-area .badge {
+    border: 1px solid #777777 !important;
+    color: #000000 !important;
   }
 }
