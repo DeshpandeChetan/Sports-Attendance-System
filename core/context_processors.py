@@ -14,6 +14,7 @@ def breadcrumbs(request):
         "trainers": "Add Trainer",
         "venues": "Venues",
         "settings": "Settings",
+        "deactivated_users": "Deleted / Deactivated Users",
         "sessions": "Schedule Practice",
         "attendance_detail": "Attendance Details",
         "take_attendance": "Take Attendance",
@@ -28,6 +29,12 @@ def breadcrumbs(request):
         return {}
     if url_name == "dashboard":
         return {"breadcrumb_items": []}
+    if url_name in {"notifications", "deactivated_users"}:
+        return {"breadcrumb_items": [
+            {"label": "Dashboard", "url_name": "dashboard"},
+            {"label": "Settings", "url_name": "settings"},
+            {"label": labels.get(url_name, "Page")},
+        ]}
     return {"breadcrumb_items": [{"label": "Dashboard", "url_name": "dashboard"}, {"label": labels.get(url_name, "Page")}]}
 
 

@@ -7,7 +7,7 @@
   <title>{% block title %}Sports Attendance{% endblock %}</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
-  <link rel="stylesheet" href="{% static 'css/app.css' %}?v=attendance-print-1">
+  <link rel="stylesheet" href="{% static 'css/app.css' %}?v=table-pagination-1">
 </head>
 <body>
   <nav class="navbar navbar-expand-lg app-topbar">
@@ -167,19 +167,30 @@
       wrapper.dataset.toolsReady = 'true';
       const headerCells = Array.from(table.querySelectorAll('thead th'));
       const headers = headerCells.map(th => th.textContent.trim());
+      const dataRows = Array.from(table.querySelectorAll('tbody tr')).filter(row => !row.querySelector('.empty-state') && row.children.length > 1);
       const tools = document.createElement('div');
       tools.className = 'table-tools';
       const searchId = `table-search-${index}`;
+      const rowsId = `table-rows-${index}`;
       tools.innerHTML = `
         <div>
           <label class="form-label" for="${searchId}">Search</label>
           <input id="${searchId}" class="form-control form-control-sm" type="search" placeholder="Search table">
         </div>
+        <div>
+          <label class="form-label" for="${rowsId}">Rows per page</label>
+          <select id="${rowsId}" class="form-select form-select-sm table-page-size">
+            <option value="10">10</option>
+            <option value="25">25</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+          </select>
+        </div>
       `;
       headers.forEach((header, columnIndex) => {
         if (!header || header.toLowerCase() === 'actions') return;
         if (headerCells[columnIndex]?.dataset.filter === 'false') return;
-        const values = Array.from(table.querySelectorAll('tbody tr')).map(row => row.children[columnIndex]?.textContent.trim()).filter(Boolean);
+        const values = dataRows.map(row => row.children[columnIndex]?.textContent.trim()).filter(Boolean);
         const uniqueValues = Array.from(new Set(values)).sort();
         if (uniqueValues.length < 2) return;
         const id = `table-filter-${index}-${columnIndex}`;
@@ -191,10 +202,11 @@
       const mobileCards = document.createElement('div');
       mobileCards.className = 'mobile-table-cards';
       const cardByRow = new Map();
+      let emptyCard = null;
       table.querySelectorAll('tbody tr').forEach((row, rowIndex) => {
         const emptyState = row.querySelector('.empty-state');
         if (emptyState) {
-          const emptyCard = document.createElement('div');
+          emptyCard = document.createElement('div');
           emptyCard.className = 'mobile-data-card mobile-empty-card';
           emptyCard.textContent = emptyState.textContent.trim();
           mobileCards.appendChild(emptyCard);
@@ -218,22 +230,118 @@
         cardByRow.set(row, card);
       });
       wrapper.parentNode.insertBefore(mobileCards, wrapper.nextSibling);
-      const applyFilters = () => {
+
+      const pagination = document.createElement('div');
+      pagination.className = 'table-pagination';
+      pagination.innerHTML = `
+        <div class="table-pagination-summary">Showing 0 of 0</div>
+        <nav aria-label="Table pagination">
+          <ul class="pagination pagination-sm mb-0"></ul>
+        </nav>
+      `;
+      mobileCards.parentNode.insertBefore(pagination, mobileCards.nextSibling);
+
+      let currentPage = 1;
+      const pageSizeSelect = tools.querySelector('.table-page-size');
+      const paginationList = pagination.querySelector('.pagination');
+      const paginationSummary = pagination.querySelector('.table-pagination-summary');
+
+      const pageButton = (label, page, isDisabled = false, isActive = false, ariaLabel = '') => {
+        const item = document.createElement('li');
+        item.className = `page-item${isDisabled ? ' disabled' : ''}${isActive ? ' active' : ''}`;
+        const button = document.createElement('button');
+        button.className = 'page-link';
+        button.type = 'button';
+        button.textContent = label;
+        if (ariaLabel) button.setAttribute('aria-label', ariaLabel);
+        button.disabled = isDisabled;
+        button.addEventListener('click', () => {
+          currentPage = page;
+          applyTableState();
+        });
+        item.appendChild(button);
+        return item;
+      };
+
+      const visiblePageNumbers = (page, totalPages) => {
+        const pages = new Set([1, totalPages, page - 1, page, page + 1]);
+        return Array.from(pages).filter(value => value >= 1 && value <= totalPages).sort((a, b) => a - b);
+      };
+
+      const renderPagination = (filteredRows, totalPages) => {
+        paginationList.innerHTML = '';
+        paginationList.appendChild(pageButton('Previous', Math.max(1, currentPage - 1), currentPage === 1, false, 'Previous page'));
+        let lastPage = 0;
+        visiblePageNumbers(currentPage, totalPages).forEach(page => {
+          if (lastPage && page - lastPage > 1) {
+            const item = document.createElement('li');
+            item.className = 'page-item disabled';
+            item.innerHTML = '<span class="page-link">...</span>';
+            paginationList.appendChild(item);
+          }
+          paginationList.appendChild(pageButton(String(page), page, false, page === currentPage, `Page ${page}`));
+          lastPage = page;
+        });
+        paginationList.appendChild(pageButton('Next', Math.min(totalPages, currentPage + 1), currentPage === totalPages, false, 'Next page'));
+
+        const pageSize = Number(pageSizeSelect.value);
+        const start = filteredRows.length ? ((currentPage - 1) * pageSize) + 1 : 0;
+        const end = Math.min(currentPage * pageSize, filteredRows.length);
+        paginationSummary.textContent = filteredRows.length ? `Showing ${start}-${end} of ${filteredRows.length}` : 'Showing 0 of 0';
+        pagination.classList.toggle('d-none', dataRows.length === 0);
+      };
+
+      const applyTableState = () => {
         const query = tools.querySelector('input[type="search"]').value.trim().toLowerCase();
         const filters = Array.from(tools.querySelectorAll('select[data-column]')).map(select => ({ column: Number(select.dataset.column), value: select.value }));
-        table.querySelectorAll('tbody tr').forEach(row => {
-          if (row.querySelector('.empty-state') || row.children.length <= 1) return;
+        const filteredRows = dataRows.filter(row => {
           const rowText = row.textContent.toLowerCase();
           const matchesSearch = !query || rowText.includes(query);
           const matchesFilters = filters.every(filter => !filter.value || row.children[filter.column]?.textContent.trim() === filter.value);
-          const isVisible = matchesSearch && matchesFilters;
+          return matchesSearch && matchesFilters;
+        });
+        const pageSize = Number(pageSizeSelect.value);
+        const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
+        if (currentPage > totalPages) currentPage = totalPages;
+        const pageStart = (currentPage - 1) * pageSize;
+        const pageRows = new Set(filteredRows.slice(pageStart, pageStart + pageSize));
+
+        dataRows.forEach(row => {
+          const isVisible = pageRows.has(row);
           row.classList.toggle('d-none', !isVisible);
           cardByRow.get(row)?.classList.toggle('d-none', !isVisible);
         });
+        emptyCard?.classList.toggle('d-none', dataRows.length !== 0);
+        renderPagination(filteredRows, totalPages);
       };
-      tools.addEventListener('input', applyFilters);
-      tools.addEventListener('change', applyFilters);
+
+      tools.addEventListener('input', () => {
+        currentPage = 1;
+        applyTableState();
+      });
+      tools.addEventListener('change', () => {
+        currentPage = 1;
+        applyTableState();
+      });
+      applyTableState();
     });
+
+    const profileImageInput = document.getElementById('id_profile_image');
+    if (profileImageInput) {
+      profileImageInput.addEventListener('change', event => {
+        const file = event.target.files?.[0];
+        if (!file || !file.type.startsWith('image/')) return;
+        const hero = event.target.closest('.profile-hero');
+        const photoWrap = hero?.querySelector('.profile-photo-wrap');
+        if (!photoWrap) return;
+        const currentPreview = photoWrap.querySelector('img, span');
+        const preview = document.createElement('img');
+        preview.src = URL.createObjectURL(file);
+        preview.alt = 'Selected profile photo preview';
+        preview.onload = () => URL.revokeObjectURL(preview.src);
+        currentPreview?.replaceWith(preview);
+      });
+    }
   </script>
   {% block scripts %}{% endblock %}
 </body>

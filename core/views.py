@@ -932,7 +932,18 @@ def trainers_list(request):
 @role_required(*ADMIN_ROLES)
 def settings_page(request):
     inactive_users = User.objects.filter(is_active=False).select_related("profile").order_by("first_name", "last_name", "email")
-    return render(request, "core/settings.html", {"inactive_users": inactive_users})
+    notification_count = Notification.objects.filter(user=request.user).count()
+    return render(request, "core/settings.html", {
+        "inactive_users_count": inactive_users.count(),
+        "notification_count": notification_count,
+    })
+
+
+@login_required
+@role_required(*ADMIN_ROLES)
+def deactivated_users(request):
+    inactive_users = User.objects.filter(is_active=False).select_related("profile").order_by("first_name", "last_name", "email")
+    return render(request, "core/deactivated_users.html", {"inactive_users": inactive_users})
 
 
 @login_required
@@ -942,12 +953,20 @@ def restore_user(request, pk):
     user.is_active = True
     user.save(update_fields=["is_active"])
     messages.success(request, f"{user.get_full_name() or user.email or user.username} restored.")
-    return redirect("settings")
+    return redirect("deactivated_users")
 
 
 @login_required
 def my_profile(request):
     profile, _ = UserProfile.objects.get_or_create(user=request.user)
+    if request.method == "POST" and request.POST.get("remove_profile_image") == "1":
+        if profile.profile_image:
+            profile.profile_image.delete(save=False)
+        profile.profile_image = None
+        profile.save(update_fields=["profile_image", "updated_at"])
+        messages.success(request, "Profile photo removed.")
+        return redirect("my_profile")
+
     form = ProfileForm(request.POST or None, request.FILES or None, instance=profile, user_instance=request.user)
     if request.method == "POST" and form.is_valid():
         form.save()

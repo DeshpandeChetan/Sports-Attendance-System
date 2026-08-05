@@ -18,6 +18,7 @@ urlpatterns = [
     path("members/<int:pk>/details/", views.member_detail, name="member_detail"),
     path("trainers/", views.trainers_list, name="trainers"),
     path("settings/", views.settings_page, name="settings"),
+    path("settings/deactivated-users/", views.deactivated_users, name="deactivated_users"),
     path("settings/users/<int:pk>/restore/", views.restore_user, name="restore_user"),
     path("my-profile/", views.my_profile, name="my_profile"),
     path("notifications/", views.notifications_list, name="notifications"),

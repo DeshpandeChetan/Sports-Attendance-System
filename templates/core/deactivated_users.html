@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Deleted / Deactivated Users{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <p class="eyebrow">Settings</p>
+    <h1>Deleted / Deactivated Users</h1>
+    <p class="text-muted mb-0">Restore users who were deleted or deactivated.</p>
+  </div>
+</div>
+
+<section class="panel">
+  <div class="section-title"><h2>User List</h2><span class="small text-muted">Deleted / deactivated users</span></div>
+  <div class="table-responsive">
+    <table class="table align-middle data-table">
+      <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Mobile</th><th class="text-end">Actions</th></tr></thead>
+      <tbody>
+        {% for item in inactive_users %}
+          <tr>
+            <td><strong>{{ item.get_full_name|default:item.username }}</strong></td>
+            <td>{{ item.email }}</td>
+            <td>{{ item.profile.get_role_display|default:"-" }}</td>
+            <td>{{ item.profile.phone|default:"-" }}</td>
+            <td class="text-end">
+              <form method="post" action="{% url 'restore_user' item.pk %}">
+                {% csrf_token %}
+                <button class="btn btn-sm btn-primary"><i class="bi bi-arrow-counterclockwise"></i> Restore</button>
+              </form>
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="5" class="empty-state">No deleted or deactivated users.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}
