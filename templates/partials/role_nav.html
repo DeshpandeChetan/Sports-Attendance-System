@@ -3,8 +3,8 @@
     <div class="nav-section">
       <p class="nav-label">Main</p>
       <a class="{% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}" href="{% url 'dashboard' %}"><i class="bi bi-speedometer2"></i><span>Dashboard</span></a>
-      {% if not user.is_superuser and user.profile.role != 'SUPER_ADMIN' and user.profile.role != 'SUB_ADMIN' %}
-        <a class="{% if request.resolver_match.url_name == 'sessions' or request.resolver_match.url_name == 'attendance_detail' or request.resolver_match.url_name == 'take_attendance' or request.resolver_match.url_name == 'delegate_attendance' %}active{% endif %}" href="{% url 'sessions' %}"><i class="bi bi-calendar-event"></i><span>Calendar</span></a>
+      {% if not user.is_superuser and user.profile.role != 'SUPER_ADMIN' and user.profile.role != 'SUB_ADMIN' and user.profile.role != 'TRAINER' and user.profile.role != 'COORDINATOR' %}
+        <a class="{% if request.resolver_match.url_name == 'sessions' or request.resolver_match.url_name == 'attendance_detail' or request.resolver_match.url_name == 'take_attendance' or request.resolver_match.url_name == 'delegate_attendance' %}active{% endif %}" href="{% url 'sessions' %}"><i class="bi bi-calendar-event"></i><span>Practice</span></a>
       {% endif %}
       {% if user.is_superuser or user.profile.role == 'SUPER_ADMIN' or user.profile.role == 'SUB_ADMIN' or user.profile.role == 'TRAINER' or user.profile.role == 'COORDINATOR' %}
         <a class="{% if request.resolver_match.url_name == 'sessions' or request.resolver_match.url_name == 'attendance_detail' or request.resolver_match.url_name == 'take_attendance' or request.resolver_match.url_name == 'delegate_attendance' %}active{% endif %}" href="{% url 'sessions' %}"><i class="bi bi-plus-circle"></i><span>Schedule Practice</span></a>
@@ -14,6 +14,9 @@
       {% endif %}
       <a class="{% if request.resolver_match.url_name == 'my_attendance' %}active{% endif %}" href="{% url 'my_attendance' %}"><i class="bi bi-clipboard-check"></i><span>My Attendance</span></a>
       <a class="{% if request.resolver_match.url_name == 'feedback' %}active{% endif %}" href="{% url 'feedback' %}"><i class="bi bi-chat-left-text"></i><span>Feedback</span></a>
+      {% if not user.is_superuser and user.profile.role != 'SUPER_ADMIN' and user.profile.role != 'SUB_ADMIN' %}
+        <a class="{% if request.resolver_match.url_name == 'settings' or request.resolver_match.url_name == 'notifications' %}active{% endif %}" href="{% url 'settings' %}"><i class="bi bi-gear"></i><span>Settings</span></a>
+      {% endif %}
     </div>
 
     {% if user.is_superuser or user.profile.role == 'SUPER_ADMIN' or user.profile.role == 'SUB_ADMIN' %}
@@ -26,7 +29,7 @@
         <a class="{% if request.resolver_match.url_name == 'venues' %}active{% endif %}" href="{% url 'venues' %}"><i class="bi bi-geo-alt"></i><span>Venues</span></a>
         <a class="{% if request.resolver_match.url_name == 'analytics' %}active{% endif %}" href="{% url 'analytics' %}"><i class="bi bi-graph-up"></i><span>Analytics</span></a>
         <a class="{% if request.resolver_match.url_name == 'reports' %}active{% endif %}" href="{% url 'reports' %}"><i class="bi bi-bar-chart"></i><span>Reports</span></a>
-        <a class="{% if request.resolver_match.url_name == 'settings' %}active{% endif %}" href="{% url 'settings' %}"><i class="bi bi-gear"></i><span>Settings</span></a>
+        <a class="{% if request.resolver_match.url_name == 'settings' or request.resolver_match.url_name == 'notifications' or request.resolver_match.url_name == 'deactivated_users' %}active{% endif %}" href="{% url 'settings' %}"><i class="bi bi-gear"></i><span>Settings</span></a>
       </div>
     {% elif user.profile.role == 'TRAINER' or user.profile.role == 'COORDINATOR' %}
       <div class="nav-section">

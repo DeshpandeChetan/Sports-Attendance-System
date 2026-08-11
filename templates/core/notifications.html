@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Notifications{% endblock %}
 {% block content %}
+{% url 'feedback' as feedback_url %}
 <div class="page-head">
   <div>
     <p class="eyebrow">Updates</p>
@@ -16,34 +17,38 @@
 
 <section class="panel">
   <div class="section-title"><h2>Notification List</h2><span class="small text-muted">Latest first</span></div>
-  <div class="notification-page-list">
-    {% for notification in notifications %}
-      <article class="notification-row {% if notification.is_read %}is-read{% endif %}">
-        <div>
-          <h3>{{ notification.title }}</h3>
-          <p>{{ notification.message }}</p>
-          <small>
-            {{ notification.created_at|date:"d M Y, h:i A" }}
-            {% if notification.team %} · {{ notification.team }}{% endif %}
-          </small>
-        </div>
-        <div class="d-flex gap-2">
-          {% if notification.target_url %}
-            <a class="btn btn-sm btn-primary" href="{{ notification.target_url }}">Open</a>
-          {% endif %}
-          {% if not notification.is_read %}
-            <form method="post" action="{% url 'mark_notifications_read' %}">
-              {% csrf_token %}
-              <input type="hidden" name="notification_id" value="{{ notification.pk }}">
-              <input type="hidden" name="next" value="{% url 'notifications' %}">
-              <button class="btn btn-sm btn-outline-secondary" type="submit">Mark Read</button>
-            </form>
-          {% endif %}
-        </div>
-      </article>
-    {% empty %}
-      <div class="empty-state">No notifications yet.</div>
-    {% endfor %}
+  <div class="table-responsive">
+    <table class="table align-middle data-table">
+      <thead><tr><th>Notification</th><th>Message</th><th>Team</th><th>Date</th><th>Status</th><th class="text-end">Actions</th></tr></thead>
+      <tbody>
+        {% for notification in notifications %}
+          <tr class="{% if notification.is_read %}is-read{% endif %}">
+            <td><strong>{{ notification.title }}</strong></td>
+            <td>{{ notification.message }}</td>
+            <td>{% if notification.team %}{{ notification.team }}{% else %}-{% endif %}</td>
+            <td>{{ notification.created_at|date:"d M Y, h:i A" }}</td>
+            <td>{% if notification.is_read %}<span class="badge text-bg-secondary">Read</span>{% else %}<span class="badge text-bg-primary">Unread</span>{% endif %}</td>
+            <td class="text-end">
+              <div class="d-flex flex-wrap gap-2 justify-content-end">
+                {% if notification.target_url == feedback_url %}
+                  <a class="btn btn-sm btn-primary" href="{{ notification.target_url }}">Open</a>
+                {% endif %}
+                {% if not notification.is_read %}
+                  <form method="post" action="{% url 'mark_notifications_read' %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="notification_id" value="{{ notification.pk }}">
+                    <input type="hidden" name="next" value="{% url 'notifications' %}">
+                    <button class="btn btn-sm btn-outline-secondary" type="submit">Mark Read</button>
+                  </form>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="6" class="empty-state">No notifications yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
   </div>
 </section>
 {% endblock %}

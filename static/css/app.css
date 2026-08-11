@@ -187,6 +187,42 @@ img.avatar {
   padding: 1rem;
 }
 
+.student-detail-head {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: .8rem;
+}
+
+.attendance-percent-box {
+  align-items: center;
+  background: rgba(127, 179, 213, .24);
+  border: 1px solid rgba(0, 86, 179, .22);
+  border-radius: .85rem;
+  color: var(--primary);
+  display: inline-grid;
+  gap: .1rem;
+  min-width: 128px;
+  padding: .55rem .85rem;
+}
+
+.attendance-percent-box span {
+  color: var(--secondary);
+  font-size: .68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.attendance-percent-box strong {
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
+.attendance-percent-box small {
+  color: var(--neutral);
+  font-weight: 700;
+}
+
 .settings-card-grid {
   display: grid;
   gap: 1rem;
@@ -487,7 +523,6 @@ img.avatar {
 
 .metric {
   border: 0;
-  min-height: 132px;
   position: relative;
 }
 

@@ -134,6 +134,28 @@ def users_for_team(team):
     return users
 
 
+def trainer_assigned_teams(user):
+    if is_admin_user(user):
+        return Team.objects.filter(is_active=True)
+    if role_for(user) in TRAINER_ROLES:
+        return Team.objects.filter(is_active=True, coordinator=user)
+    return Team.objects.none()
+
+
+def can_manage_student_membership(user, membership):
+    if is_admin_user(user):
+        return True
+    return bool(membership and can_manage_team(user, membership.team))
+
+
+def can_view_student_user(user, student):
+    if is_admin_user(user):
+        return True
+    if role_for(user) in TRAINER_ROLES:
+        return Membership.objects.filter(user=student, team__coordinator=user).exists()
+    return False
+
+
 def create_notifications(users, title, message, actor=None, target_url="", sport=None, team=None, session=None):
     notifications = []
     seen = set()
@@ -214,8 +236,8 @@ BULK_UPLOAD_TEMPLATES = {
     },
     "students": {
         "filename": "students_bulk_upload_sample.xlsx",
-        "headers": ["Student Name", "Student Email", "Mobile Number", "Reg No", "Department", "Class", "Team", "Status"],
-        "rows": [["Rahul Sharma", "rahul.sharma@christuniversity.in", "9876543210", "22104321", "MSDS", "2 MSc DS", "Basketball - Male Men's Team A", "Active"]],
+        "headers": ["Student Name", "Student Email", "Mobile Number", "Reg No", "Department", "Class", "Gender", "Sport", "Team Type", "Team", "Status"],
+        "rows": [["Rahul Sharma", "rahul.sharma@christuniversity.in", "9876543210", "22104321", "MSDS", "2 MSc DS", "Male", "Basketball", "University", "Men's Team A", "Active"]],
     },
     "trainers": {
         "filename": "trainers_bulk_upload_sample.xlsx",
@@ -273,22 +295,53 @@ def is_student_leader_candidate(user):
     return role in {UserProfile.Role.MEMBER, UserProfile.Role.CAPTAIN, UserProfile.Role.VICE_CAPTAIN}
 
 
-def find_team_by_label(label):
+def normalize_choice_label(value):
+    return str(value or "").strip().lower()
+
+
+def find_team_type(value):
+    value = normalize_choice_label(value)
+    if not value:
+        return None
+    for stored_value, label in Team.TeamType.choices:
+        if value in {stored_value.lower(), label.lower()}:
+            return stored_value
+    return None
+
+
+def normalize_gender(value):
+    value = normalize_choice_label(value)
+    if value in {"male", "m"}:
+        return "Male"
+    if value in {"female", "f"}:
+        return "Female"
+    return ""
+
+
+def find_team_by_label(label, sport=None, team_type=None):
     label = str(label or "").strip().lower()
     if not label:
         return None
-    for team in Team.objects.select_related("sport"):
+    teams = Team.objects.select_related("sport")
+    sport = str(sport or "").strip()
+    resolved_team_type = find_team_type(team_type)
+    if sport:
+        teams = teams.filter(sport__name__iexact=sport)
+    if resolved_team_type:
+        teams = teams.filter(team_type=resolved_team_type)
+    for team in teams:
         labels = {
             team.name.lower(),
             str(team).lower(),
             f"{team.sport.name} - {team.get_gender_display()} {team.name}".lower(),
+            f"{team.sport.name} - {team.get_team_type_display()} - {team.get_gender_display()} {team.name}".lower(),
         }
         if label in labels:
             return team
     return None
 
 
-def save_student_record(full_name, email, department="", class_name="", phone="", register_no="", existing_user=None):
+def save_student_record(full_name, email, department="", class_name="", phone="", register_no="", gender="", existing_user=None):
     email = str(email or "").strip().lower()
     phone = str(phone or "").strip()
     register_no = str(register_no or "").strip()
@@ -311,7 +364,8 @@ def save_student_record(full_name, email, department="", class_name="", phone=""
     profile.class_name = str(class_name or "").strip()
     profile.phone = phone
     profile.register_no = register_no
-    profile.save(update_fields=["role", "department", "class_name", "phone", "register_no", "updated_at"])
+    profile.gender = normalize_gender(gender)
+    profile.save(update_fields=["role", "department", "class_name", "phone", "register_no", "gender", "updated_at"])
     return user
 
 
@@ -322,7 +376,8 @@ def build_student_from_post(request, existing_user=None):
     class_name = request.POST.get("class_name", "").strip()
     phone = request.POST.get("mobile_number", "").strip()
     register_no = request.POST.get("register_no", "").strip()
-    return save_student_record(full_name, email, department, class_name, phone, register_no, existing_user=existing_user)
+    gender = request.POST.get("gender", "").strip()
+    return save_student_record(full_name, email, department, class_name, phone, register_no, gender, existing_user=existing_user)
 
 
 def create_student_from_access_request(access_request):
@@ -451,7 +506,7 @@ def import_teams_from_file(uploaded_file):
     return created, errors
 
 
-def import_students_from_file(uploaded_file):
+def import_students_from_file(uploaded_file, user=None):
     created = 0
     errors = []
     for index, row in enumerate(read_bulk_upload_rows(uploaded_file), start=2):
@@ -459,6 +514,19 @@ def import_students_from_file(uploaded_file):
         if missing:
             errors.append(f"Row {index}: {', '.join(missing)} required.")
             continue
+        sport_name = str(row.get("sport") or "").strip()
+        team_type = str(row.get("team_type") or "").strip()
+        team = find_team_by_label(row.get("team"), sport=sport_name, team_type=team_type)
+        if row.get("team") and not team:
+            errors.append(f"Row {index}: Team was not found for the selected Sport and Team Type.")
+            continue
+        if user and not is_admin_user(user):
+            if not team:
+                errors.append(f"Row {index}: Team is required for trainer uploads.")
+                continue
+            if not can_manage_team(user, team):
+                errors.append(f"Row {index}: You cannot add students to this team.")
+                continue
         try:
             student = save_student_record(
                 row.get("student_name"),
@@ -467,8 +535,8 @@ def import_students_from_file(uploaded_file):
                 row.get("class"),
                 row.get("mobile_number"),
                 row.get("reg_no") or row.get("register_no"),
+                row.get("gender"),
             )
-            team = find_team_by_label(row.get("team"))
             if team:
                 membership, _ = Membership.objects.get_or_create(user=student, team=team)
                 membership.is_active = truthy_cell(row.get("status") or row.get("active"), True)
@@ -747,11 +815,16 @@ def team_form(request, pk=None):
 
 @login_required
 def members_list(request):
-    if is_admin_user(request.user) and request.method == "POST":
+    can_manage_students = is_admin_user(request.user) or role_for(request.user) in TRAINER_ROLES
+    allowed_teams = trainer_assigned_teams(request.user)
+    if can_manage_students and request.method == "POST":
         action = request.POST.get("action")
         request_id = request.POST.get("request_id")
         access_request = get_object_or_404(LoginAccessRequest, pk=request_id) if request_id else None
         if action in {"approve_request", "reject_request"} and access_request:
+            if not is_admin_user(request.user):
+                messages.error(request, "You cannot manage login requests.")
+                return redirect("members")
             with transaction.atomic():
                 access_request.status = LoginAccessRequest.Status.APPROVED if action == "approve_request" else LoginAccessRequest.Status.REJECTED
                 access_request.reviewed_by = request.user
@@ -765,7 +838,7 @@ def members_list(request):
 
         if action == "bulk_upload":
             try:
-                created, errors = import_students_from_file(request.FILES.get("bulk_file"))
+                created, errors = import_students_from_file(request.FILES.get("bulk_file"), request.user)
                 add_bulk_upload_messages(request, created, errors)
             except ValueError as exc:
                 messages.error(request, str(exc))
@@ -773,15 +846,40 @@ def members_list(request):
 
         membership_id = request.POST.get("membership_id")
         membership = get_object_or_404(Membership, pk=membership_id) if membership_id else None
+        if membership and not can_manage_student_membership(request.user, membership):
+            messages.error(request, "You cannot manage students from this team.")
+            return redirect("members")
         user_id = request.POST.get("user_id")
         existing_user = membership.user if membership else User.objects.filter(pk=user_id).first() if user_id else None
+        if existing_user and not is_admin_user(request.user) and not can_view_student_user(request.user, existing_user):
+            messages.error(request, "You cannot manage this student.")
+            return redirect("members")
         if action in {"create", "update"}:
             try:
                 with transaction.atomic():
-                    student = build_student_from_post(request, existing_user=existing_user)
+                    posted_email = request.POST.get("student_email", "").strip().lower()
+                    email_user = User.objects.filter(email__iexact=posted_email).first() if posted_email else None
+                    if not is_admin_user(request.user) and email_user and not can_view_student_user(request.user, email_user):
+                        if action == "update":
+                            messages.error(request, "You cannot update students from another team.")
+                            return redirect("members")
+                        student = email_user
+                    else:
+                        student = build_student_from_post(request, existing_user=existing_user)
                     team_id = request.POST.get("team")
                     if team_id:
                         team = get_object_or_404(Team, pk=team_id)
+                        if not can_manage_team(request.user, team):
+                            messages.error(request, "You cannot assign students to this team.")
+                            return redirect("members")
+                        sport_id = request.POST.get("sport")
+                        team_type = request.POST.get("team_type")
+                        if sport_id and str(team.sport_id) != str(sport_id):
+                            messages.error(request, "Selected team does not match the selected sport.")
+                            return redirect("members")
+                        if team_type and team.team_type != team_type:
+                            messages.error(request, "Selected team does not match the selected team type.")
+                            return redirect("members")
                         if membership is None:
                             membership, created = Membership.objects.get_or_create(user=student, team=team)
                         else:
@@ -791,6 +889,9 @@ def members_list(request):
                         membership.save()
                         messages.success(request, "Student saved and assigned successfully.")
                     else:
+                        if not is_admin_user(request.user):
+                            messages.error(request, "Team is required for trainer student access.")
+                            return redirect("members")
                         messages.success(request, "Student saved. Team can be assigned later.")
             except ValueError as exc:
                 messages.error(request, str(exc))
@@ -798,7 +899,7 @@ def members_list(request):
             membership.is_active = False
             membership.save(update_fields=["is_active", "updated_at"])
             messages.success(request, "Member deactivated for this team.")
-        elif action == "deactivate" and existing_user:
+        elif action == "deactivate" and existing_user and is_admin_user(request.user):
             existing_user.is_active = False
             existing_user.save(update_fields=["is_active"])
             messages.success(request, "Student deactivated.")
@@ -806,14 +907,14 @@ def members_list(request):
             membership.is_active = True
             membership.save(update_fields=["is_active", "updated_at"])
             messages.success(request, "Member activated for this team.")
-        elif action == "activate" and existing_user:
+        elif action == "activate" and existing_user and is_admin_user(request.user):
             existing_user.is_active = True
             existing_user.save(update_fields=["is_active"])
             messages.success(request, "Student activated.")
         elif action == "delete" and membership:
             membership.delete()
             messages.success(request, "Member assignment deleted.")
-        elif action == "delete" and existing_user:
+        elif action == "delete" and existing_user and is_admin_user(request.user):
             student_name = existing_user.get_full_name() or existing_user.email or existing_user.username
             existing_user.is_active = False
             existing_user.save(update_fields=["is_active"])
@@ -822,7 +923,10 @@ def members_list(request):
 
     memberships = Membership.objects.select_related("user", "user__profile", "team", "team__sport")
     if not is_admin_user(request.user):
-        memberships = memberships.filter(team__in=Team.objects.filter(Q(captain=request.user) | Q(vice_captain=request.user) | Q(coordinator=request.user)))
+        if role_for(request.user) in TRAINER_ROLES:
+            memberships = memberships.filter(team__in=allowed_teams)
+        else:
+            memberships = memberships.filter(team__in=Team.objects.filter(Q(captain=request.user) | Q(vice_captain=request.user)))
     assigned_user_ids = set()
     student_rows = []
     for membership in memberships:
@@ -832,23 +936,54 @@ def members_list(request):
         unassigned_students = User.objects.filter(profile__role=UserProfile.Role.MEMBER).exclude(pk__in=assigned_user_ids).select_related("profile").order_by("first_name", "last_name", "email")
         for student in unassigned_students:
             student_rows.append({"membership": None, "user": student, "team": None, "is_active": student.is_active})
-    teams = Team.objects.filter(is_active=True).select_related("sport").order_by("sport__name", "name")
-    login_requests = LoginAccessRequest.objects.exclude(status=LoginAccessRequest.Status.APPROVED).order_by("status", "-requested_at")
-    return render(request, "core/members.html", {"memberships": memberships, "student_rows": student_rows, "teams": teams, "login_requests": login_requests})
+    teams = allowed_teams.select_related("sport").order_by("sport__name", "name")
+    sports = Sport.objects.filter(teams__in=allowed_teams, is_active=True).distinct().order_by("name")
+    login_requests = LoginAccessRequest.objects.exclude(status=LoginAccessRequest.Status.APPROVED).order_by("status", "-requested_at") if is_admin_user(request.user) else []
+    return render(request, "core/members.html", {
+        "memberships": memberships,
+        "student_rows": student_rows,
+        "teams": teams,
+        "sports": sports,
+        "team_types": Team.TeamType.choices,
+        "login_requests": login_requests,
+        "can_manage_students": can_manage_students,
+        "is_admin_user": is_admin_user(request.user),
+    })
 
 
 @login_required
-@role_required(*ADMIN_ROLES)
 def member_detail(request, pk):
     student = get_object_or_404(User.objects.select_related("profile"), pk=pk)
+    if not can_view_student_user(request.user, student):
+        messages.error(request, "You cannot view this student.")
+        return redirect("members")
     memberships = Membership.objects.filter(user=student).select_related("team", "team__sport")
     records = AttendanceRecord.objects.filter(member=student).select_related("session", "session__team", "session__team__sport", "marked_by")
+    if not is_admin_user(request.user):
+        allowed_teams = trainer_assigned_teams(request.user)
+        memberships = memberships.filter(team__in=allowed_teams)
+        records = records.filter(session__team__in=allowed_teams)
+    total_records = records.count()
+    attended_records = records.filter(status__in=[
+        AttendanceRecord.Status.PRESENT,
+        AttendanceRecord.Status.LATE,
+        AttendanceRecord.Status.EARLY_EXIT,
+    ]).count()
+    attendance_percent = round((attended_records / total_records) * 100, 1) if total_records else None
     breadcrumb_items = [
         {"label": "Dashboard", "url_name": "dashboard"},
         {"label": "Add Students", "url_name": "members"},
         {"label": student.get_full_name() or student.email or student.username},
     ]
-    return render(request, "core/member_detail.html", {"student": student, "memberships": memberships, "records": records, "breadcrumb_items": breadcrumb_items})
+    return render(request, "core/member_detail.html", {
+        "student": student,
+        "memberships": memberships,
+        "records": records,
+        "attendance_percent": attendance_percent,
+        "attendance_total": total_records,
+        "attendance_attended": attended_records,
+        "breadcrumb_items": breadcrumb_items,
+    })
 
 
 @login_required
@@ -929,13 +1064,13 @@ def trainers_list(request):
 
 
 @login_required
-@role_required(*ADMIN_ROLES)
 def settings_page(request):
     inactive_users = User.objects.filter(is_active=False).select_related("profile").order_by("first_name", "last_name", "email")
     notification_count = Notification.objects.filter(user=request.user).count()
     return render(request, "core/settings.html", {
         "inactive_users_count": inactive_users.count(),
         "notification_count": notification_count,
+        "is_settings_admin": is_admin_user(request.user),
     })
 
 
@@ -1191,6 +1326,7 @@ def take_attendance(request, pk):
         session = locked_session
     members = User.objects.filter(memberships__team=session.team, memberships__is_active=True).distinct().order_by("first_name", "last_name", "username")
     if request.method == "POST":
+        valid_statuses = {value for value, _ in AttendanceRecord.Status.choices}
         with transaction.atomic():
             locked_session = Session.objects.select_for_update().get(pk=session.pk)
             if locked_session.attendance_started_by and locked_session.attendance_started_by != request.user:
@@ -1198,8 +1334,14 @@ def take_attendance(request, pk):
                 return redirect("sessions")
             for member in members:
                 status = request.POST.get(f"status_{member.pk}", AttendanceRecord.Status.ABSENT)
+                if status not in valid_statuses:
+                    status = AttendanceRecord.Status.ABSENT
                 remarks = request.POST.get(f"remarks_{member.pk}", "")
-                AttendanceRecord.objects.create(session=session, member=member, status=status, remarks=remarks, marked_by=request.user)
+                AttendanceRecord.objects.update_or_create(
+                    session=locked_session,
+                    member=member,
+                    defaults={"status": status, "remarks": remarks, "marked_by": request.user},
+                )
             locked_session.attendance_submitted = True
             locked_session.submitted_by = request.user
             locked_session.submitted_by_role = role_label(request.user)

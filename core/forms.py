@@ -10,13 +10,39 @@ User = get_user_model()
 
 
 class BootstrapFormMixin:
+    select_placeholders = {
+        "sport": "Select Sport",
+        "team": "Select Team",
+        "student": "Select Student",
+        "user": "Select Student",
+        "captain": "Select Captain",
+        "vice_captain": "Select Vice Captain",
+        "coordinator": "Select Trainer",
+        "assigned_to": "Select Student",
+        "receiver": "Select Student",
+        "session": "Select Session",
+        "role": "Select Role",
+        "gender": "Select Gender",
+        "team_type": "Select Team Type",
+        "schedule_slot": "Select Schedule",
+        "venue_choice": "Select Venue",
+        "status": "Select Status",
+    }
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        for field in self.fields.values():
+        for field_name, field in self.fields.items():
             css = "form-select" if isinstance(field.widget, forms.Select) else "form-control"
             if isinstance(field.widget, forms.CheckboxInput):
                 css = "form-check-input"
             field.widget.attrs.setdefault("class", css)
+            if isinstance(field, forms.ModelChoiceField):
+                field.empty_label = self.select_placeholders.get(field_name, f"Select {field.label}")
+            elif isinstance(field.widget, forms.Select) and not isinstance(field.widget, forms.CheckboxSelectMultiple):
+                choices = list(field.choices)
+                if choices and choices[0][0] not in {"", None}:
+                    placeholder = self.select_placeholders.get(field_name, f"Select {field.label}")
+                    field.choices = [("", placeholder)] + choices
 
 
 class SportForm(BootstrapFormMixin, forms.ModelForm):
@@ -104,7 +130,7 @@ class ProfileForm(BootstrapFormMixin, forms.ModelForm):
     first_name = forms.CharField(max_length=150, required=False)
     last_name = forms.CharField(max_length=150, required=False)
     email = forms.EmailField(disabled=True, required=False)
-    gender = forms.ChoiceField(choices=[("", "---------"), ("Male", "Male"), ("Female", "Female")], required=False)
+    gender = forms.ChoiceField(choices=[("", "Select Gender"), ("Male", "Male"), ("Female", "Female")], required=False)
 
     class Meta:
         model = UserProfile
@@ -153,7 +179,7 @@ class SessionForm(BootstrapFormMixin, forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields["title"].required = False
         venue_choices = [(venue.name, venue.name) for venue in Venue.objects.filter(is_active=True)]
-        self.fields["venue_choice"].choices = venue_choices + [("OTHER", "Other")]
+        self.fields["venue_choice"].choices = [("", "Select Venue")] + venue_choices + [("OTHER", "Other")]
         if self.instance and self.instance.pk:
             self.fields["start_date"].initial = timezone.localtime(self.instance.start_at).date()
             self.fields["end_date"].initial = timezone.localtime(self.instance.end_at).date()
@@ -164,8 +190,6 @@ class SessionForm(BootstrapFormMixin, forms.ModelForm):
 
     def clean(self):
         cleaned = super().clean()
-        if cleaned.get("venue_choice") == "OTHER" and not cleaned.get("other_venue"):
-            self.add_error("other_venue", "Enter the venue name.")
         start_date = cleaned.get("start_date")
         end_date = cleaned.get("end_date")
         if start_date and end_date and end_date < start_date:
@@ -180,7 +204,10 @@ class SessionForm(BootstrapFormMixin, forms.ModelForm):
         session.start_at = timezone.make_aware(datetime.combine(self.cleaned_data["start_date"], start_clock))
         session.end_at = timezone.make_aware(datetime.combine(self.cleaned_data["end_date"], end_clock))
         session.title = self.cleaned_data.get("title") or "Practice session"
-        session.venue = f"Other - {self.cleaned_data['other_venue']}" if self.cleaned_data["venue_choice"] == "OTHER" else self.cleaned_data["venue_choice"]
+        if self.cleaned_data["venue_choice"] == "OTHER":
+            session.venue = f"Other - {self.cleaned_data['other_venue']}" if self.cleaned_data.get("other_venue") else "Other"
+        else:
+            session.venue = self.cleaned_data["venue_choice"]
         if commit:
             session.save()
         return session

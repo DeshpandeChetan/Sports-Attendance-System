@@ -4,7 +4,14 @@
 <div class="page-head">
   <div>
     <p class="eyebrow">Student Details</p>
-    <h1>{{ student.get_full_name|default:student.email }}</h1>
+    <div class="student-detail-head">
+      <h1>{{ student.get_full_name|default:student.email }}</h1>
+      <div class="attendance-percent-box">
+        <span>Attendance</span>
+        <strong>{% if attendance_percent is not None %}{{ attendance_percent }}%{% else %}-{% endif %}</strong>
+        <small>{% if attendance_percent is not None %}{{ attendance_attended }}/{{ attendance_total }} sessions{% else %}No records{% endif %}</small>
+      </div>
+    </div>
     <p class="text-muted mb-0">Profile, teams, and attendance history.</p>
   </div>
   <a class="btn btn-outline-primary" href="{% url 'members' %}"><i class="bi bi-arrow-left"></i> Back to Add Students</a>
