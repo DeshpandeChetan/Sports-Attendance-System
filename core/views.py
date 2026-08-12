@@ -60,18 +60,40 @@ def dashboard(request):
     role = role_for(request.user)
     today = timezone.localdate()
     sessions = visible_sessions(request.user)
+    trainer_stats = None
+    completed_sessions = sessions.filter(attendance_submitted=True)[:8]
+    upcoming_sessions = sessions.filter(start_at__date__gte=today)[:8]
     male_teams = Team.objects.filter(gender=Team.TeamGender.MALE).count()
     female_teams = Team.objects.filter(gender=Team.TeamGender.FEMALE).count()
     student_count = User.objects.filter(profile__role=UserProfile.Role.MEMBER).count()
     trainer_count = User.objects.filter(profile__role__in=[UserProfile.Role.TRAINER, UserProfile.Role.COORDINATOR]).count()
     sport_count = Sport.objects.count()
+    sport_stats = Sport.objects.annotate(session_count=Count("teams__sessions")).order_by("name")
+    if role in TRAINER_ROLES and not is_admin_user(request.user):
+        assigned_teams = trainer_assigned_teams(request.user)
+        sessions = Session.objects.filter(team__in=assigned_teams).select_related("team", "team__sport")
+        completed_sessions = sessions.filter(attendance_submitted=True)[:8]
+        upcoming_sessions = sessions.filter(start_at__date__gte=today, attendance_submitted=False)[:8]
+        sport_stats = Sport.objects.filter(teams__in=assigned_teams).annotate(
+            session_count=Count("teams__sessions", filter=Q(teams__in=assigned_teams), distinct=True)
+        ).distinct().order_by("name")
+        trainer_stats = {
+            "sports": assigned_teams.values("sport").distinct().count(),
+            "teams": assigned_teams.count(),
+            "students": User.objects.filter(memberships__team__in=assigned_teams, memberships__is_active=True).distinct().count(),
+            "sessions": sessions.count(),
+            "completed": sessions.filter(attendance_submitted=True).count(),
+            "upcoming": sessions.filter(start_at__date__gte=today, attendance_submitted=False).count(),
+        }
     context = {
         "role": role,
-        "today_sessions": sessions.filter(start_at__date=today)[:8],
-        "upcoming_sessions": sessions.filter(start_at__date__gte=today)[:8],
+        "today_sessions": add_session_permissions(request.user, sessions.filter(start_at__date=today)[:8]),
+        "upcoming_sessions": add_session_permissions(request.user, upcoming_sessions),
+        "completed_sessions": add_session_permissions(request.user, completed_sessions),
         "attendance_percent": attendance_percentage(request.user),
         "unread_feedback": Feedback.objects.filter(receiver=request.user, is_read=False).count(),
-        "sport_stats": Sport.objects.annotate(session_count=Count("teams__sessions")).order_by("name"),
+        "sport_stats": sport_stats,
+        "trainer_stats": trainer_stats,
         "admin_stats": {
             "sports": sport_count,
             "students": student_count,
@@ -117,6 +139,16 @@ def visible_sessions(user):
         | Q(team__coordinator=user)
         | Q(delegates__assigned_to=user)
     ).distinct()
+
+
+def add_session_permissions(user, sessions):
+    now = timezone.now()
+    session_list = list(sessions)
+    for item in session_list:
+        item.can_manage_for_user = can_manage_team(user, item.team)
+        item.can_take_for_user = can_take_attendance(user, item)
+        item.has_active_attendance_lock = attendance_lock_active(item, now)
+    return session_list
 
 
 def admin_users():
@@ -176,6 +208,21 @@ def create_notifications(users, title, message, actor=None, target_url="", sport
         ))
     if notifications:
         Notification.objects.bulk_create(notifications)
+
+
+def notify_practice_session(session, title, message, actor, teams=None, include_session=True):
+    notification_teams = teams or [session.team]
+    for team in notification_teams:
+        create_notifications(
+            users_for_team(team),
+            title,
+            message,
+            actor=actor,
+            target_url=reverse("sessions"),
+            sport=team.sport,
+            team=team,
+            session=session if include_session else None,
+        )
 
 
 def notify_common_action(actor, title, message, target_url):
@@ -1163,6 +1210,8 @@ def sessions_list(request):
             except (ValueError, TypeError) as exc:
                 messages.error(request, str(exc))
         elif action in {"create", "update"}:
+            original_team = session.team if session else None
+            original_schedule = (session.start_at, session.end_at, session.schedule_slot, session.team_id) if session else None
             form = SessionForm(request.POST, instance=session)
             if not is_admin_user(request.user):
                 form.fields["team"].queryset = Team.objects.filter(coordinator=request.user)
@@ -1173,15 +1222,24 @@ def sessions_list(request):
                     obj.scheduled_by = obj.scheduled_by or request.user
                     obj.save()
                     if is_new_session:
-                        create_notifications(
-                            users_for_team(obj.team),
+                        notify_practice_session(
+                            obj,
                             "New practice session",
                             f"{obj.title or 'Practice session'} scheduled for {obj.team}.",
                             actor=request.user,
-                            target_url=reverse("sessions"),
-                            sport=obj.team.sport,
-                            team=obj.team,
-                            session=obj,
+                        )
+                    else:
+                        updated_schedule = (obj.start_at, obj.end_at, obj.schedule_slot, obj.team_id)
+                        event_title = "Practice session rescheduled" if original_schedule != updated_schedule else "Practice session updated"
+                        impacted_teams = [obj.team]
+                        if original_team and original_team.pk != obj.team_id:
+                            impacted_teams.append(original_team)
+                        notify_practice_session(
+                            obj,
+                            event_title,
+                            f"{obj.title or 'Practice session'} updated for {obj.team}.",
+                            actor=request.user,
+                            teams=impacted_teams,
                         )
                     messages.success(request, "Practice session saved successfully.")
                 else:
@@ -1189,7 +1247,17 @@ def sessions_list(request):
             else:
                 messages.error(request, "Please correct the session details and try again.")
         elif action == "delete" and session:
+            cancelled_title = session.title or "Practice session"
+            cancelled_team = session.team
             session.delete()
+            notify_practice_session(
+                session,
+                "Practice session cancelled",
+                f"{cancelled_title} cancelled for {cancelled_team}.",
+                actor=request.user,
+                teams=[cancelled_team],
+                include_session=False,
+            )
             messages.success(request, "Practice session deleted.")
         return redirect("sessions")
 
@@ -1212,12 +1280,7 @@ def sessions_list(request):
     if not is_admin_user(request.user):
         team_qs = team_qs.filter(coordinator=request.user)
     can_schedule_any = is_admin_user(request.user) or (role_for(request.user) in TRAINER_ROLES and team_qs.exists())
-    now = timezone.now()
-    session_list = list(sessions)
-    for item in session_list:
-        item.can_manage_for_user = can_manage_team(request.user, item.team)
-        item.can_take_for_user = can_take_attendance(request.user, item)
-        item.has_active_attendance_lock = attendance_lock_active(item, now)
+    session_list = add_session_permissions(request.user, sessions)
     venues = Venue.objects.filter(is_active=True).order_by("name")
     return render(request, "core/sessions.html", {"sessions": session_list, "form": form, "teams": team_qs, "venues": venues, "can_schedule_any": can_schedule_any})
 
@@ -1228,6 +1291,8 @@ def session_form(request, pk=None):
     if session and not can_manage_team(request.user, session.team):
         messages.error(request, "You cannot edit this session.")
         return redirect("sessions")
+    original_team = session.team if session else None
+    original_schedule = (session.start_at, session.end_at, session.schedule_slot, session.team_id) if session else None
     form = SessionForm(request.POST or None, instance=session)
     if not is_admin_user(request.user):
         form.fields["team"].queryset = Team.objects.filter(coordinator=request.user)
@@ -1240,15 +1305,24 @@ def session_form(request, pk=None):
         obj.scheduled_by = obj.scheduled_by or request.user
         obj.save()
         if is_new_session:
-            create_notifications(
-                users_for_team(obj.team),
+            notify_practice_session(
+                obj,
                 "New practice session",
                 f"{obj.title or 'Practice session'} scheduled for {obj.team}.",
                 actor=request.user,
-                target_url=reverse("sessions"),
-                sport=obj.team.sport,
-                team=obj.team,
-                session=obj,
+            )
+        else:
+            updated_schedule = (obj.start_at, obj.end_at, obj.schedule_slot, obj.team_id)
+            event_title = "Practice session rescheduled" if original_schedule != updated_schedule else "Practice session updated"
+            impacted_teams = [obj.team]
+            if original_team and original_team.pk != obj.team_id:
+                impacted_teams.append(original_team)
+            notify_practice_session(
+                obj,
+                event_title,
+                f"{obj.title or 'Practice session'} updated for {obj.team}.",
+                actor=request.user,
+                teams=impacted_teams,
             )
         messages.success(request, "Practice session saved.")
         return redirect("sessions")
@@ -1263,11 +1337,22 @@ def delegate_attendance(request, pk):
         return redirect("sessions")
     form = DelegateForm(request.POST or None, session=session)
     if request.method == "POST" and form.is_valid():
-        AttendanceDelegate.objects.get_or_create(
+        delegate, created = AttendanceDelegate.objects.get_or_create(
             session=session,
             assigned_to=form.cleaned_data["assigned_to"],
             defaults={"assigned_by": request.user, "reason": form.cleaned_data["reason"]},
         )
+        if created:
+            Notification.objects.create(
+                user=delegate.assigned_to,
+                actor=request.user,
+                title="Session Incharge assigned",
+                message=f"You have been assigned as Session Incharge for {session.title or 'Practice session'} - {session.team} on {timezone.localtime(session.start_at):%d %b %Y}.",
+                target_url=reverse("sessions"),
+                sport=session.team.sport,
+                team=session.team,
+                session=session,
+            )
         messages.success(request, "Attendance delegate assigned.")
         return redirect("sessions")
     return render(request, "core/form.html", {"form": form, "title": "Assign Session Incharge", "back_url": reverse("sessions")})
@@ -1409,7 +1494,7 @@ def send_feedback(request):
         form = FeedbackForm(request.POST or None)
         feedback_type = Feedback.FeedbackType.ADMIN_TO_STUDENT if is_admin_user(request.user) else Feedback.FeedbackType.COORDINATOR_TO_STUDENT
     else:
-        form = SessionFeedbackForm(request.POST or None)
+        form = SessionFeedbackForm(request.POST or None, user=request.user)
         feedback_type = Feedback.FeedbackType.STUDENT_TO_ADMIN
     if request.method == "POST" and form.is_valid():
         feedback = form.save(commit=False)

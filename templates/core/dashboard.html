@@ -10,7 +10,7 @@
   <a class="btn btn-primary" href="{% url 'sessions' %}">Schedule Practice</a>
 </div>
 
-<div class="metric-grid {% if user.is_superuser or user.profile.role == 'SUPER_ADMIN' or user.profile.role == 'SUB_ADMIN' %}admin-metric-grid{% endif %}">
+<div class="metric-grid {% if user.is_superuser or user.profile.role == 'SUPER_ADMIN' or user.profile.role == 'SUB_ADMIN' %}admin-metric-grid{% elif trainer_stats %}trainer-metric-grid{% endif %}">
   {% if user.is_superuser or user.profile.role == 'SUPER_ADMIN' or user.profile.role == 'SUB_ADMIN' %}
     <div class="metric metric-sports"><i class="bi bi-trophy"></i><span>Sports</span><strong>{{ admin_stats.sports }}</strong></div>
     <div class="metric metric-teams"><i class="bi bi-diagram-3"></i><span>Teams</span><strong>{{ admin_stats.teams }}</strong></div>
@@ -18,6 +18,13 @@
     <div class="metric metric-trainers"><i class="bi bi-person-workspace"></i><span>Trainers</span><strong>{{ admin_stats.trainers }}</strong></div>
     <div class="metric metric-male"><i class="bi bi-gender-male"></i><span>Male Teams</span><strong>{{ admin_stats.male_teams }}</strong></div>
     <div class="metric metric-female"><i class="bi bi-gender-female"></i><span>Female Teams</span><strong>{{ admin_stats.female_teams }}</strong></div>
+  {% elif trainer_stats %}
+    <div class="metric metric-sports"><i class="bi bi-trophy"></i><span>Assigned Sports</span><strong>{{ trainer_stats.sports }}</strong></div>
+    <div class="metric metric-teams"><i class="bi bi-diagram-3"></i><span>Assigned Teams</span><strong>{{ trainer_stats.teams }}</strong></div>
+    <div class="metric metric-students"><i class="bi bi-people"></i><span>Assigned Students</span><strong>{{ trainer_stats.students }}</strong></div>
+    <div class="metric metric-trainers"><i class="bi bi-calendar-event"></i><span>Total Sessions</span><strong>{{ trainer_stats.sessions }}</strong></div>
+    <div class="metric metric-male"><i class="bi bi-check2-circle"></i><span>Completed</span><strong>{{ trainer_stats.completed }}</strong></div>
+    <div class="metric metric-female"><i class="bi bi-hourglass-split"></i><span>Upcoming</span><strong>{{ trainer_stats.upcoming }}</strong></div>
   {% endif %}
   <div class="metric metric-attendance"><i class="bi bi-clipboard-check"></i><span>Attendance</span><strong>{% if attendance_percent != None %}{{ attendance_percent }}%{% else %}No records{% endif %}</strong></div>
   <div class="metric metric-feedback"><i class="bi bi-chat-left-text"></i><span>Unread Feedback</span><strong>{{ unread_feedback }}</strong></div>
@@ -50,4 +57,11 @@
   <div class="section-title"><h2>Upcoming sessions</h2><a href="{% url 'sessions' %}">View all</a></div>
   {% include "core/session_table.html" with sessions=upcoming_sessions %}
 </section>
+
+{% if trainer_stats %}
+  <section class="panel mt-4">
+    <div class="section-title"><h2>Completed Sessions / History</h2><a href="{% url 'sessions' %}">View all</a></div>
+    {% include "core/session_table.html" with sessions=completed_sessions %}
+  </section>
+{% endif %}
 {% endblock %}

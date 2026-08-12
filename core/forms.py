@@ -247,6 +247,19 @@ class SessionFeedbackForm(BootstrapFormMixin, forms.ModelForm):
         fields = ["session", "message"]
         widgets = {"message": forms.Textarea(attrs={"rows": 4})}
 
+    def __init__(self, *args, **kwargs):
+        user = kwargs.pop("user", None)
+        super().__init__(*args, **kwargs)
+        if user is None:
+            self.fields["session"].queryset = Session.objects.none()
+            return
+        assigned_teams = Team.objects.filter(
+            Q(memberships__user=user, memberships__is_active=True)
+            | Q(captain=user)
+            | Q(vice_captain=user)
+        ).distinct()
+        self.fields["session"].queryset = Session.objects.filter(team__in=assigned_teams).select_related("team", "team__sport").order_by("-start_at")
+
 
 class ReportFilterForm(BootstrapFormMixin, forms.Form):
     sport = forms.ModelChoiceField(queryset=Sport.objects.all(), required=False)

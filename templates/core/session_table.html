@@ -11,8 +11,10 @@
           <td class="text-end">
             {% if session.attendance_submitted %}
               <a class="btn btn-sm btn-outline-primary" href="{% url 'attendance_detail' session.pk %}">View</a>
-            {% else %}
+            {% elif session.can_take_for_user %}
               <a class="btn btn-sm btn-primary" href="{% url 'take_attendance' session.pk %}">Attendance</a>
+            {% else %}
+              <span class="badge text-bg-light">No action</span>
             {% endif %}
           </td>
         </tr>

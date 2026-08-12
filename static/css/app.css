@@ -595,7 +595,8 @@ img.avatar {
   margin-bottom: 1.5rem;
 }
 
-.admin-metric-grid {
+.metric-grid.admin-metric-grid,
+.metric-grid.trainer-metric-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
@@ -1426,7 +1427,8 @@ body.modal-open {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .admin-metric-grid {
+  .metric-grid.admin-metric-grid,
+  .metric-grid.trainer-metric-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
