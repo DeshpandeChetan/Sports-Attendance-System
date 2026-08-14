@@ -2,10 +2,12 @@ from django.contrib import admin
 
 from .models import (
     AttendanceDelegate,
+    AttendanceDelegateLog,
     AttendanceEditLog,
     AttendanceRecord,
     Feedback,
     LoginAccessRequest,
+    Meeting,
     Membership,
     Session,
     Sport,
@@ -63,6 +65,13 @@ class AttendanceDelegateAdmin(admin.ModelAdmin):
     search_fields = ("assigned_to__username", "assigned_to__email", "session__title")
 
 
+@admin.register(AttendanceDelegateLog)
+class AttendanceDelegateLogAdmin(admin.ModelAdmin):
+    list_display = ("session", "previous_delegate", "new_delegate", "changed_by", "changed_at")
+    list_filter = ("session__team__sport", "changed_at")
+    search_fields = ("previous_delegate__username", "previous_delegate__email", "new_delegate__username", "new_delegate__email", "session__title")
+
+
 @admin.register(AttendanceRecord)
 class AttendanceRecordAdmin(admin.ModelAdmin):
     list_display = ("session", "member", "status", "marked_by", "marked_at")
@@ -74,6 +83,14 @@ class AttendanceRecordAdmin(admin.ModelAdmin):
 class AttendanceEditLogAdmin(admin.ModelAdmin):
     list_display = ("attendance_record", "old_status", "new_status", "edited_by", "edited_at")
     list_filter = ("old_status", "new_status")
+
+
+@admin.register(Meeting)
+class MeetingAdmin(admin.ModelAdmin):
+    list_display = ("title", "meeting_date", "start_time", "end_time", "venue", "scheduled_by")
+    list_filter = ("meeting_date", "sports", "teams")
+    search_fields = ("title", "venue", "agenda")
+    filter_horizontal = ("sports", "teams", "trainers", "participants")
 
 
 @admin.register(Feedback)

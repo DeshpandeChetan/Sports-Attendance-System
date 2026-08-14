@@ -10,11 +10,13 @@
 <section class="panel mb-4">
   <form class="row g-3" method="get">
     <div class="col-md-2">{{ form.sport.label_tag }}{{ form.sport }}</div>
+    <div class="col-md-2">{{ form.gender.label_tag }}{{ form.gender }}</div>
+    <div class="col-md-2">{{ form.team_type.label_tag }}{{ form.team_type }}</div>
     <div class="col-md-2">{{ form.team.label_tag }}{{ form.team }}</div>
-    <div class="col-md-3">{{ form.student.label_tag }}{{ form.student }}</div>
+    <div class="col-md-2">{{ form.student.label_tag }}{{ form.student }}</div>
     <div class="col-md-2">{{ form.start_date.label_tag }}{{ form.start_date }}</div>
     <div class="col-md-2">{{ form.end_date.label_tag }}{{ form.end_date }}</div>
-    <div class="col-md-1 d-flex align-items-end"><button class="btn btn-primary w-100">Go</button></div>
+    <div class="col-md-2 d-flex align-items-end"><button class="btn btn-primary w-100">Go</button></div>
   </form>
 </section>
 <section class="panel">

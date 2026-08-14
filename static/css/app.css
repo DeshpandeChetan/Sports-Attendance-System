@@ -206,6 +206,12 @@ img.avatar {
   padding: .55rem .85rem;
 }
 
+.attendance-sport-boxes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .6rem;
+}
+
 .attendance-percent-box span {
   color: var(--secondary);
   font-size: .68rem;
@@ -959,7 +965,9 @@ body.modal-open {
   max-height: 260px;
 }
 
-.team-check-grid {
+.team-check-grid,
+.team-check-list,
+.membership-select-list {
   display: grid;
   gap: .75rem;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -968,7 +976,9 @@ body.modal-open {
   padding-right: .25rem;
 }
 
-.team-check {
+.team-check,
+.team-check-item,
+.membership-select-item {
   align-items: flex-start;
   background: rgba(255, 255, 255, .68);
   border: 1px solid rgba(104, 114, 128, .22);
@@ -978,15 +988,57 @@ body.modal-open {
   padding: .75rem;
 }
 
-.team-check span {
+.team-check span,
+.team-check-item span,
+.membership-select-item span {
   display: flex;
   flex-direction: column;
   gap: .12rem;
+  flex: 1;
 }
 
-.team-check small {
+.team-check small,
+.team-check-item small,
+.membership-select-item small {
   color: var(--neutral);
   font-weight: 600;
+}
+
+.team-check-item > i,
+.membership-select-item > i {
+  color: var(--secondary);
+  display: none;
+  font-size: 1rem;
+  margin-left: auto;
+}
+
+.team-check-item:has(input:checked),
+.membership-select-item:has(input:checked) {
+  background: rgba(127, 179, 213, .22);
+  border-color: rgba(0, 86, 179, .35);
+}
+
+.team-check-item.is-disabled {
+  opacity: .56;
+}
+
+.multi-select-dropdown .form-select {
+  cursor: pointer;
+}
+
+.multi-select-menu {
+  max-height: 320px;
+  min-width: 100%;
+  overflow-y: auto;
+}
+
+.multi-select-menu .dropdown-item {
+  white-space: normal;
+}
+
+.team-check-item input:checked ~ i,
+.membership-select-item input:checked ~ i {
+  display: inline-flex;
 }
 
 .team-player-grid {

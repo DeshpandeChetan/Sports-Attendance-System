@@ -6,10 +6,20 @@
     <p class="eyebrow">Student Details</p>
     <div class="student-detail-head">
       <h1>{{ student.get_full_name|default:student.email }}</h1>
-      <div class="attendance-percent-box">
-        <span>Attendance</span>
-        <strong>{% if attendance_percent is not None %}{{ attendance_percent }}%{% else %}-{% endif %}</strong>
-        <small>{% if attendance_percent is not None %}{{ attendance_attended }}/{{ attendance_total }} sessions{% else %}No records{% endif %}</small>
+      <div class="attendance-sport-boxes">
+        {% for item in attendance_sport_stats %}
+          <div class="attendance-percent-box">
+            <span>{{ item.sport.name }}</span>
+            <strong>{% if item.percent is not None %}{{ item.percent }}%{% else %}-{% endif %}</strong>
+            <small>{% if item.percent is not None %}{{ item.attended }}/{{ item.total }} sessions{% else %}No records{% endif %}</small>
+          </div>
+        {% empty %}
+          <div class="attendance-percent-box">
+            <span>Attendance</span>
+            <strong>-</strong>
+            <small>No records</small>
+          </div>
+        {% endfor %}
       </div>
     </div>
     <p class="text-muted mb-0">Profile, teams, and attendance history.</p>

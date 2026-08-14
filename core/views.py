@@ -31,10 +31,12 @@ from .forms import (
 )
 from .models import (
     AttendanceDelegate,
+    AttendanceDelegateLog,
     AttendanceEditLog,
     AttendanceRecord,
     Feedback,
     LoginAccessRequest,
+    Meeting,
     Membership,
     Notification,
     Session,
@@ -88,6 +90,7 @@ def dashboard(request):
     context = {
         "role": role,
         "today_sessions": add_session_permissions(request.user, sessions.filter(start_at__date=today)[:8]),
+        "today_meetings": visible_meetings(request.user).prefetch_related("sports", "teams", "trainers", "participants").select_related("scheduled_by").filter(meeting_date=today)[:8],
         "upcoming_sessions": add_session_permissions(request.user, upcoming_sessions),
         "completed_sessions": add_session_permissions(request.user, completed_sessions),
         "attendance_percent": attendance_percentage(request.user),
@@ -114,18 +117,60 @@ def dashboard(request):
 @login_required
 @role_required(*ADMIN_ROLES)
 def analytics(request):
+    today = timezone.localdate()
     male_teams = Team.objects.filter(gender=Team.TeamGender.MALE).count()
     female_teams = Team.objects.filter(gender=Team.TeamGender.FEMALE).count()
     student_count = User.objects.filter(profile__role=UserProfile.Role.MEMBER).count()
     trainer_count = User.objects.filter(profile__role__in=[UserProfile.Role.TRAINER, UserProfile.Role.COORDINATOR]).count()
     sport_count = Sport.objects.count()
     team_count = male_teams + female_teams
+    total_attendance = AttendanceRecord.objects.count()
+    attended_attendance = AttendanceRecord.objects.filter(status__in=[
+        AttendanceRecord.Status.PRESENT,
+        AttendanceRecord.Status.LATE,
+        AttendanceRecord.Status.EARLY_EXIT,
+    ]).count()
+    absent_attendance = AttendanceRecord.objects.filter(status=AttendanceRecord.Status.ABSENT).count()
+    attendance_percent = round((attended_attendance / total_attendance) * 100, 1) if total_attendance else None
+    total_sessions = Session.objects.count()
+    completed_sessions = Session.objects.filter(attendance_submitted=True).count()
+    upcoming_sessions = Session.objects.filter(start_at__date__gte=today, attendance_submitted=False).count()
+    assigned_trainers = User.objects.filter(
+        profile__role__in=[UserProfile.Role.TRAINER, UserProfile.Role.COORDINATOR],
+        coordinated_teams__isnull=False,
+    ).distinct().count()
+    trainer_rows = User.objects.filter(
+        Q(profile__role__in=[UserProfile.Role.TRAINER, UserProfile.Role.COORDINATOR])
+        | Q(coordinated_teams__isnull=False)
+    ).annotate(
+        assigned_team_count=Count("coordinated_teams", distinct=True),
+        session_count=Count("coordinated_teams__sessions", distinct=True),
+        completed_session_count=Count("coordinated_teams__sessions", filter=Q(coordinated_teams__sessions__attendance_submitted=True), distinct=True),
+        upcoming_session_count=Count("coordinated_teams__sessions", filter=Q(coordinated_teams__sessions__start_at__date__gte=today, coordinated_teams__sessions__attendance_submitted=False), distinct=True),
+    ).distinct().order_by("first_name", "last_name", "email")
     chart_data = {
         "teamGender": {"labels": ["Male Teams", "Female Teams"], "data": [male_teams, female_teams]},
         "people": {"labels": ["Students", "Trainers"], "data": [student_count, trainer_count]},
         "inventory": {"labels": ["Sports", "Teams"], "data": [sport_count, team_count]},
+        "attendance": {"labels": ["Attended", "Absent"], "data": [attended_attendance, absent_attendance]},
+        "sessions": {"labels": ["Completed", "Upcoming", "Other"], "data": [completed_sessions, upcoming_sessions, max(total_sessions - completed_sessions - upcoming_sessions, 0)]},
+        "trainers": {"labels": ["Assigned", "Unassigned"], "data": [assigned_trainers, max(trainer_count - assigned_trainers, 0)]},
     }
-    return render(request, "core/analytics.html", {"dashboard_chart_data": chart_data})
+    return render(request, "core/analytics.html", {
+        "dashboard_chart_data": chart_data,
+        "analytics_stats": {
+            "attendance_percent": attendance_percent,
+            "attendance_records": total_attendance,
+            "attended_records": attended_attendance,
+            "absent_records": absent_attendance,
+            "sessions": total_sessions,
+            "completed_sessions": completed_sessions,
+            "upcoming_sessions": upcoming_sessions,
+            "trainers": trainer_count,
+            "assigned_trainers": assigned_trainers,
+        },
+        "trainer_rows": trainer_rows,
+    })
 
 
 def visible_sessions(user):
@@ -139,6 +184,10 @@ def visible_sessions(user):
         | Q(team__coordinator=user)
         | Q(delegates__assigned_to=user)
     ).distinct()
+
+
+def visible_meetings(user):
+    return Meeting.objects.filter(Q(participants=user) | Q(scheduled_by=user)).distinct()
 
 
 def add_session_permissions(user, sessions):
@@ -188,12 +237,12 @@ def can_view_student_user(user, student):
     return False
 
 
-def create_notifications(users, title, message, actor=None, target_url="", sport=None, team=None, session=None):
+def create_notifications(users, title, message, actor=None, target_url="", sport=None, team=None, session=None, include_actor=False):
     notifications = []
     seen = set()
     actor_id = getattr(actor, "pk", None)
     for user in users:
-        if not user or user.pk in seen or user.pk == actor_id:
+        if not user or user.pk in seen or (user.pk == actor_id and not include_actor):
             continue
         seen.add(user.pk)
         notifications.append(Notification(
@@ -208,6 +257,47 @@ def create_notifications(users, title, message, actor=None, target_url="", sport
         ))
     if notifications:
         Notification.objects.bulk_create(notifications)
+
+
+def notify_team_membership_change(actor, users, team, change):
+    if not users:
+        return
+    labels = {
+        "added": ("Team membership added", "added to"),
+        "removed": ("Team membership removed", "removed from"),
+        "activated": ("Team membership activated", "activated for"),
+        "deactivated": ("Team membership deactivated", "deactivated for"),
+    }
+    title, verb = labels[change]
+    message = f"You have been {verb} {team.sport.name} - {team.get_gender_display()} {team.name}."
+    create_notifications(
+        users,
+        title,
+        message,
+        actor=actor,
+        target_url=reverse("teams"),
+        sport=team.sport,
+        team=team,
+        include_actor=True,
+    )
+
+
+def notify_team_role_change(actor, user, team, role_name, assigned=True):
+    if not user:
+        return
+    action = "assigned as" if assigned else "removed as"
+    title = f"{role_name} {'assigned' if assigned else 'removed'}"
+    message = f"You have been {action} {role_name} for {team.sport.name} - {team.get_gender_display()} {team.name}."
+    create_notifications(
+        [user],
+        title,
+        message,
+        actor=actor,
+        target_url=reverse("teams"),
+        sport=team.sport,
+        team=team,
+        include_actor=True,
+    )
 
 
 def notify_practice_session(session, title, message, actor, teams=None, include_session=True):
@@ -227,6 +317,10 @@ def notify_practice_session(session, title, message, actor, teams=None, include_
 
 def notify_common_action(actor, title, message, target_url):
     create_notifications(User.objects.filter(is_active=True), title, message, actor=actor, target_url=target_url)
+
+
+def user_label(user):
+    return user.get_full_name() or user.email or user.username
 
 
 def attendance_lock_active(session, now=None):
@@ -386,6 +480,142 @@ def find_team_by_label(label, sport=None, team_type=None):
         if label in labels:
             return team
     return None
+
+
+def membership_conflict_message(teams):
+    seen = {}
+    for team in teams:
+        key = (team.sport_id, team.gender)
+        existing = seen.get(key)
+        if existing and existing.pk != team.pk:
+            return (
+                "A student can belong to only one Team Category within the same Sport and Gender. "
+                f"Conflict: {existing} and {team}."
+            )
+        seen[key] = team
+    return ""
+
+
+def validate_student_team_memberships(student, selected_teams, replace_team_ids=None):
+    replace_team_ids = set(replace_team_ids or [])
+    existing_teams = Team.objects.filter(memberships__user=student).exclude(pk__in=replace_team_ids).select_related("sport")
+    return membership_conflict_message(list(existing_teams) + list(selected_teams))
+
+
+def parse_int_ids(values):
+    return [int(value) for value in values if str(value).isdigit()]
+
+
+def build_meeting_preview(post_data, organizer=None):
+    title = (post_data.get("title") or "").strip()
+    meeting_date = post_data.get("meeting_date")
+    start_time = post_data.get("start_time")
+    end_time = post_data.get("end_time")
+    venue_choice = (post_data.get("venue") or "").strip()
+    other_venue = (post_data.get("other_venue") or "").strip()
+    venue = f"Other - {other_venue}" if venue_choice == "OTHER" and other_venue else venue_choice
+    agenda = (post_data.get("agenda") or "").strip()
+    sport_ids = parse_int_ids(post_data.getlist("sports"))
+    team_ids = parse_int_ids(post_data.getlist("teams"))
+    trainer_ids = parse_int_ids(post_data.getlist("trainers"))
+    errors = []
+    if not title:
+        errors.append("Meeting Title is required.")
+    if not meeting_date:
+        errors.append("Date is required.")
+    if not start_time:
+        errors.append("Start Time is required.")
+    if not end_time:
+        errors.append("End Time is required.")
+    if start_time and end_time and start_time >= end_time:
+        errors.append("End Time must be after Start Time.")
+    if not venue_choice:
+        errors.append("Venue is required.")
+    if venue_choice == "OTHER" and not other_venue:
+        errors.append("Specific Venue is required when Venue is Other.")
+    if not sport_ids:
+        errors.append("Select at least one Sport.")
+    if not team_ids:
+        errors.append("Select at least one Team.")
+
+    sports = Sport.objects.filter(pk__in=sport_ids, is_active=True).order_by("name")
+    teams = Team.objects.filter(pk__in=team_ids, is_active=True, sport_id__in=sport_ids).select_related("sport").order_by("sport__name", "gender", "name")
+    trainers = User.objects.filter(
+        pk__in=trainer_ids,
+        is_active=True,
+        profile__role__in=[UserProfile.Role.TRAINER, UserProfile.Role.COORDINATOR],
+    ).select_related("profile").order_by("first_name", "last_name", "email")
+    if len(sport_ids) != sports.count():
+        errors.append("One or more selected Sports are invalid.")
+    if len(team_ids) != teams.count():
+        errors.append("One or more selected Teams do not belong to the selected Sports.")
+    if len(trainer_ids) != trainers.count():
+        errors.append("One or more selected Trainers are invalid.")
+
+    participants_by_id = {trainer.pk: trainer for trainer in trainers}
+    if organizer:
+        participants_by_id[organizer.pk] = organizer
+    team_modes = {}
+    for team in teams:
+        mode = post_data.get(f"team_participants_{team.pk}", "LEADS")
+        if mode not in {"LEADS", "ALL"}:
+            mode = "LEADS"
+        team_modes[str(team.pk)] = mode
+        if mode == "ALL":
+            team_users = User.objects.filter(memberships__team=team, memberships__is_active=True, is_active=True)
+        else:
+            lead_ids = [value for value in [team.captain_id, team.vice_captain_id] if value]
+            team_users = User.objects.filter(pk__in=lead_ids, is_active=True)
+        for participant in team_users.select_related("profile"):
+            participants_by_id[participant.pk] = participant
+    participants = sorted(participants_by_id.values(), key=lambda item: (user_label(item).lower(), item.pk))
+    if not participants:
+        errors.append("No participants were found for the selected Trainers/Teams.")
+    try:
+        display_date = datetime.strptime(meeting_date, "%Y-%m-%d").strftime("%d/%m/%Y") if meeting_date else ""
+    except ValueError:
+        display_date = meeting_date or ""
+    try:
+        display_start_time = datetime.strptime(start_time, "%H:%M").strftime("%I:%M %p").lower() if start_time else ""
+        display_end_time = datetime.strptime(end_time, "%H:%M").strftime("%I:%M %p").lower() if end_time else ""
+    except ValueError:
+        display_start_time = start_time or ""
+        display_end_time = end_time or ""
+
+    return {
+        "errors": errors,
+        "data": {
+            "title": title,
+            "meeting_date": meeting_date,
+            "start_time": start_time,
+            "end_time": end_time,
+            "venue_choice": venue_choice,
+            "venue": venue,
+            "other_venue": other_venue,
+            "agenda": agenda,
+            "sport_ids": [sport.pk for sport in sports],
+            "team_ids": [team.pk for team in teams],
+            "trainer_ids": [trainer.pk for trainer in trainers],
+            "participant_ids": [participant.pk for participant in participants],
+            "team_modes": team_modes,
+        },
+        "preview": {
+            "title": title,
+            "meeting_date": meeting_date,
+            "display_date": display_date,
+            "start_time": start_time,
+            "end_time": end_time,
+            "display_start_time": display_start_time,
+            "display_end_time": display_end_time,
+            "venue": venue,
+            "agenda": agenda,
+            "sports": [sport.name for sport in sports],
+            "teams": [str(team) for team in teams],
+            "trainers": [user_label(trainer) for trainer in trainers],
+            "participants": [user_label(participant) for participant in participants],
+            "team_modes": {str(team.pk): "Complete Team" if team_modes.get(str(team.pk)) == "ALL" else "Captain and Vice Captain Only" for team in teams},
+        },
+    }
 
 
 def save_student_record(full_name, email, department="", class_name="", phone="", register_no="", gender="", existing_user=None):
@@ -585,9 +815,21 @@ def import_students_from_file(uploaded_file, user=None):
                 row.get("gender"),
             )
             if team:
-                membership, _ = Membership.objects.get_or_create(user=student, team=team)
-                membership.is_active = truthy_cell(row.get("status") or row.get("active"), True)
+                conflict = validate_student_team_memberships(student, [team], replace_team_ids=[team.pk])
+                if conflict:
+                    errors.append(f"Row {index}: {conflict}")
+                    continue
+                membership, membership_created = Membership.objects.get_or_create(user=student, team=team)
+                was_active = membership.is_active
+                new_active = truthy_cell(row.get("status") or row.get("active"), True)
+                membership.is_active = new_active
                 membership.save(update_fields=["is_active", "updated_at"])
+                if new_active and membership_created:
+                    notify_team_membership_change(user, [student], team, "added")
+                elif new_active and not was_active:
+                    notify_team_membership_change(user, [student], team, "activated")
+                elif was_active and not new_active:
+                    notify_team_membership_change(user, [student], team, "deactivated")
             created += 1
         except ValueError as exc:
             errors.append(f"Row {index}: {exc}")
@@ -801,9 +1043,31 @@ def teams_list(request):
         team_id = request.POST.get("team_id")
         team = get_object_or_404(Team, pk=team_id) if team_id else None
         if action in {"create", "update"}:
+            previous_roles = {
+                "captain": team.captain if team else None,
+                "vice_captain": team.vice_captain if team else None,
+                "coordinator": team.coordinator if team else None,
+            }
             form = TeamForm(request.POST, instance=team)
             if form.is_valid():
                 saved_team = form.save()
+                current_roles = {
+                    "captain": saved_team.captain,
+                    "vice_captain": saved_team.vice_captain,
+                    "coordinator": saved_team.coordinator,
+                }
+                role_labels = {
+                    "captain": "Captain",
+                    "vice_captain": "Vice Captain",
+                    "coordinator": "Trainer",
+                }
+                for role_key, role_label in role_labels.items():
+                    previous_user = previous_roles[role_key]
+                    current_user = current_roles[role_key]
+                    if previous_user and previous_user != current_user:
+                        notify_team_role_change(request.user, previous_user, saved_team, role_label, assigned=False)
+                    if current_user and current_user != previous_user:
+                        notify_team_role_change(request.user, current_user, saved_team, role_label, assigned=True)
                 if action == "create":
                     notify_common_action(
                         request.user,
@@ -832,15 +1096,83 @@ def teams_list(request):
             team_name = team.name
             team.delete()
             messages.success(request, f"{team_name} deleted.")
+        elif action == "update_team_players" and team:
+            selected_user_ids = {user_id for user_id in request.POST.getlist("players") if str(user_id).isdigit()}
+            submitted_candidate_ids = {user_id for user_id in request.POST.getlist("all_player_ids") if str(user_id).isdigit()}
+            student_roles = [UserProfile.Role.MEMBER, UserProfile.Role.CAPTAIN, UserProfile.Role.VICE_CAPTAIN]
+            eligible_students = User.objects.filter(
+                is_active=True,
+                profile__role__in=student_roles,
+            ).distinct()
+            eligible_ids = {str(user_id) for user_id in eligible_students.values_list("pk", flat=True)}
+            submitted_candidate_ids &= eligible_ids
+            if not submitted_candidate_ids:
+                messages.error(request, "No eligible students were submitted for this team update.")
+                return redirect("teams")
+            selected_user_ids &= eligible_ids
+            selected_user_ids &= submitted_candidate_ids
+            conflict_messages = []
+            for user_id in selected_user_ids:
+                student = User.objects.get(pk=user_id)
+                conflict = validate_student_team_memberships(student, [team], replace_team_ids=[team.pk])
+                if conflict:
+                    student_name = student.get_full_name() or student.email or student.username
+                    conflict_messages.append(f"{student_name}: {conflict}")
+            if conflict_messages:
+                messages.error(request, " ".join(conflict_messages[:3]))
+                return redirect("teams")
+            added_ids = set()
+            activated_ids = set()
+            removed_ids = set()
+            with transaction.atomic():
+                existing_memberships = {
+                    item.user_id: item.is_active
+                    for item in Membership.objects.filter(team=team)
+                }
+                existing_ids = set(existing_memberships)
+                previous_active_ids = {user_id for user_id, is_active in existing_memberships.items() if is_active}
+                selected_ids_int = {int(user_id) for user_id in selected_user_ids}
+                submitted_ids_int = {int(user_id) for user_id in submitted_candidate_ids}
+                remove_ids = submitted_ids_int - selected_ids_int
+                added_ids = selected_ids_int - existing_ids
+                activated_ids = {user_id for user_id in selected_ids_int.intersection(existing_ids) if not existing_memberships.get(user_id)}
+                removed_ids = previous_active_ids.intersection(remove_ids)
+                Membership.objects.filter(team=team, user_id__in=remove_ids).delete()
+                for user_id in selected_user_ids:
+                    membership, _ = Membership.objects.get_or_create(user_id=user_id, team=team)
+                    if not membership.is_active:
+                        membership.is_active = True
+                        membership.save(update_fields=["is_active", "updated_at"])
+                updates = []
+                if team.captain_id and str(team.captain_id) not in selected_user_ids:
+                    team.captain = None
+                    updates.append("captain")
+                if team.vice_captain_id and str(team.vice_captain_id) not in selected_user_ids:
+                    team.vice_captain = None
+                    updates.append("vice_captain")
+                if updates:
+                    updates.append("updated_at")
+                    team.save(update_fields=updates)
+                added_count = len(added_ids) + len(activated_ids)
+                removed_count = len(removed_ids)
+            notify_team_membership_change(request.user, User.objects.filter(pk__in=added_ids), team, "added")
+            notify_team_membership_change(request.user, User.objects.filter(pk__in=activated_ids), team, "activated")
+            notify_team_membership_change(request.user, User.objects.filter(pk__in=removed_ids), team, "removed")
+            messages.success(request, f"Team players updated successfully. Added {added_count}, removed {removed_count}.")
         return redirect("teams")
 
     teams = Team.objects.select_related("sport", "captain", "vice_captain", "coordinator").prefetch_related("memberships__user", "memberships__user__profile")
     if not is_admin_user(request.user):
         teams = teams.filter(Q(memberships__user=request.user) | Q(captain=request.user) | Q(vice_captain=request.user) | Q(coordinator=request.user)).distinct()
     teams = list(teams)
+    student_roles = [UserProfile.Role.MEMBER, UserProfile.Role.CAPTAIN, UserProfile.Role.VICE_CAPTAIN]
     for team in teams:
         team.active_memberships = [membership for membership in team.memberships.all() if membership.is_active]
-    student_roles = [UserProfile.Role.MEMBER, UserProfile.Role.CAPTAIN, UserProfile.Role.VICE_CAPTAIN]
+        team.player_candidates = User.objects.filter(
+            is_active=True,
+            profile__role__in=student_roles,
+        ).distinct().select_related("profile").order_by("first_name", "last_name", "email")
+        team.active_member_ids = {membership.user_id for membership in team.active_memberships}
     trainer_roles = [UserProfile.Role.TRAINER, UserProfile.Role.COORDINATOR]
     users = User.objects.filter(is_active=True, profile__role__in=student_roles).order_by("first_name", "last_name", "username")
     trainer_users = User.objects.filter(is_active=True, profile__role__in=trainer_roles).order_by("first_name", "last_name", "username")
@@ -902,6 +1234,7 @@ def members_list(request):
             messages.error(request, "You cannot manage this student.")
             return redirect("members")
         if action in {"create", "update"}:
+            membership_notifications = []
             try:
                 with transaction.atomic():
                     posted_email = request.POST.get("student_email", "").strip().lower()
@@ -913,39 +1246,97 @@ def members_list(request):
                         student = email_user
                     else:
                         student = build_student_from_post(request, existing_user=existing_user)
-                    team_id = request.POST.get("team")
-                    if team_id:
-                        team = get_object_or_404(Team, pk=team_id)
-                        if not can_manage_team(request.user, team):
-                            messages.error(request, "You cannot assign students to this team.")
+                    previous_active_team_ids = set(Membership.objects.filter(
+                        user=student,
+                        team__in=allowed_teams,
+                        is_active=True,
+                    ).values_list("team_id", flat=True))
+                    selected_sport_ids = {int(sport_id) for sport_id in request.POST.getlist("sports") if str(sport_id).isdigit()}
+                    selected_team_types = set(request.POST.getlist("team_types"))
+                    valid_team_types = {value for value, _ in Team.TeamType.choices}
+                    selected_team_types = selected_team_types.intersection(valid_team_types)
+                    selected_team_ids = request.POST.getlist("teams")
+                    fallback_team = request.POST.get("team")
+                    if not selected_team_ids and fallback_team:
+                        selected_team_ids = [fallback_team]
+                    allowed_team_ids = set(allowed_teams.values_list("pk", flat=True))
+                    selected_team_ids = {int(team_id) for team_id in selected_team_ids if str(team_id).isdigit()}
+                    if selected_sport_ids:
+                        selected_team_ids = set(
+                            Team.objects.filter(pk__in=selected_team_ids, sport_id__in=selected_sport_ids).values_list("pk", flat=True)
+                        )
+                    if selected_team_types:
+                        selected_team_ids = set(
+                            Team.objects.filter(pk__in=selected_team_ids, team_type__in=selected_team_types).values_list("pk", flat=True)
+                        )
+                    if selected_team_ids and not selected_team_ids.issubset(allowed_team_ids):
+                        messages.error(request, "You cannot assign students to one or more selected teams.")
+                        return redirect("members")
+                    if selected_team_ids:
+                        selected_teams = Team.objects.filter(pk__in=selected_team_ids).select_related("sport")
+                        conflict = validate_student_team_memberships(student, selected_teams, replace_team_ids=allowed_team_ids)
+                        if conflict:
+                            messages.error(request, conflict)
                             return redirect("members")
-                        sport_id = request.POST.get("sport")
-                        team_type = request.POST.get("team_type")
-                        if sport_id and str(team.sport_id) != str(sport_id):
-                            messages.error(request, "Selected team does not match the selected sport.")
-                            return redirect("members")
-                        if team_type and team.team_type != team_type:
-                            messages.error(request, "Selected team does not match the selected team type.")
-                            return redirect("members")
-                        if membership is None:
-                            membership, created = Membership.objects.get_or_create(user=student, team=team)
-                        else:
-                            membership.user = student
-                            membership.team = team
-                        membership.is_active = request.POST.get("is_active") == "on"
-                        membership.save()
-                        messages.success(request, "Student saved and assigned successfully.")
+                        active_value = request.POST.get("is_active") == "on"
+                        for selected_team in selected_teams:
+                            selected_membership, _ = Membership.objects.get_or_create(user=student, team=selected_team)
+                            selected_membership.is_active = active_value
+                            selected_membership.save()
+                        Membership.objects.filter(user=student, team_id__in=allowed_team_ids).exclude(team_id__in=selected_team_ids).delete()
+                        messages.success(request, "Student saved and team assignments updated successfully.")
                     else:
                         if not is_admin_user(request.user):
                             messages.error(request, "Team is required for trainer student access.")
                             return redirect("members")
+                        if action == "update":
+                            Membership.objects.filter(user=student, team_id__in=allowed_team_ids).delete()
                         messages.success(request, "Student saved. Team can be assigned later.")
+                    current_memberships = {
+                        item.team_id: item.is_active
+                        for item in Membership.objects.filter(user=student, team__in=allowed_teams)
+                    }
+                    current_active_team_ids = {team_id for team_id, is_active in current_memberships.items() if is_active}
+                    added_or_activated_ids = current_active_team_ids - previous_active_team_ids
+                    no_longer_active_ids = previous_active_team_ids - current_active_team_ids
+                    deactivated_ids = {team_id for team_id in no_longer_active_ids if team_id in current_memberships}
+                    removed_ids = no_longer_active_ids - deactivated_ids
+                    changed_team_ids = added_or_activated_ids | deactivated_ids | removed_ids
+                    teams_by_id = {
+                        item.pk: item
+                        for item in Team.objects.filter(pk__in=changed_team_ids).select_related("sport")
+                    }
+                    membership_notifications = [
+                        (teams_by_id[team_id], "added")
+                        for team_id in added_or_activated_ids
+                        if team_id in teams_by_id
+                    ]
+                    membership_notifications.extend(
+                        (teams_by_id[team_id], "deactivated")
+                        for team_id in deactivated_ids
+                        if team_id in teams_by_id
+                    )
+                    membership_notifications.extend(
+                        (teams_by_id[team_id], "removed")
+                        for team_id in removed_ids
+                        if team_id in teams_by_id
+                    )
             except ValueError as exc:
                 messages.error(request, str(exc))
+            else:
+                for changed_team, change in membership_notifications:
+                    notify_team_membership_change(request.user, [student], changed_team, change)
         elif action == "deactivate" and membership:
             membership.is_active = False
             membership.save(update_fields=["is_active", "updated_at"])
+            notify_team_membership_change(request.user, [membership.user], membership.team, "deactivated")
             messages.success(request, "Member deactivated for this team.")
+        elif action == "deactivate" and existing_user and role_for(request.user) in TRAINER_ROLES:
+            memberships_to_deactivate = list(Membership.objects.filter(user=existing_user, team__in=allowed_teams, is_active=True).select_related("team", "team__sport"))
+            Membership.objects.filter(user=existing_user, team__in=allowed_teams).update(is_active=False)
+            for changed_membership in memberships_to_deactivate:
+                notify_team_membership_change(request.user, [existing_user], changed_membership.team, "deactivated")
+            messages.success(request, "Student deactivated for your assigned team(s).")
         elif action == "deactivate" and existing_user and is_admin_user(request.user):
             existing_user.is_active = False
             existing_user.save(update_fields=["is_active"])
@@ -953,14 +1344,30 @@ def members_list(request):
         elif action == "activate" and membership:
             membership.is_active = True
             membership.save(update_fields=["is_active", "updated_at"])
+            notify_team_membership_change(request.user, [membership.user], membership.team, "activated")
             messages.success(request, "Member activated for this team.")
+        elif action == "activate" and existing_user and role_for(request.user) in TRAINER_ROLES:
+            memberships_to_activate = list(Membership.objects.filter(user=existing_user, team__in=allowed_teams, is_active=False).select_related("team", "team__sport"))
+            Membership.objects.filter(user=existing_user, team__in=allowed_teams).update(is_active=True)
+            for changed_membership in memberships_to_activate:
+                notify_team_membership_change(request.user, [existing_user], changed_membership.team, "activated")
+            messages.success(request, "Student activated for your assigned team(s).")
         elif action == "activate" and existing_user and is_admin_user(request.user):
             existing_user.is_active = True
             existing_user.save(update_fields=["is_active"])
             messages.success(request, "Student activated.")
         elif action == "delete" and membership:
+            changed_team = membership.team
+            changed_user = membership.user
             membership.delete()
+            notify_team_membership_change(request.user, [changed_user], changed_team, "removed")
             messages.success(request, "Member assignment deleted.")
+        elif action == "delete" and existing_user and role_for(request.user) in TRAINER_ROLES:
+            memberships_to_delete = list(Membership.objects.filter(user=existing_user, team__in=allowed_teams).select_related("team", "team__sport"))
+            Membership.objects.filter(user=existing_user, team__in=allowed_teams).delete()
+            for changed_membership in memberships_to_delete:
+                notify_team_membership_change(request.user, [existing_user], changed_membership.team, "removed")
+            messages.success(request, "Student removed from your assigned team(s).")
         elif action == "delete" and existing_user and is_admin_user(request.user):
             student_name = existing_user.get_full_name() or existing_user.email or existing_user.username
             existing_user.is_active = False
@@ -975,14 +1382,47 @@ def members_list(request):
         else:
             memberships = memberships.filter(team__in=Team.objects.filter(Q(captain=request.user) | Q(vice_captain=request.user)))
     assigned_user_ids = set()
+    assigned_team_ids_by_user = {}
+    assigned_team_labels_by_user = {}
+    assigned_sport_ids_by_user = {}
+    assigned_sport_labels_by_user = {}
+    assigned_team_types_by_user = {}
+    assigned_team_type_labels_by_user = {}
+    active_membership_by_user = {}
+    first_membership_by_user = {}
+    team_type_labels = dict(Team.TeamType.choices)
+    for assigned_membership in memberships:
+        first_membership_by_user.setdefault(assigned_membership.user_id, assigned_membership)
+        active_membership_by_user[assigned_membership.user_id] = (
+            active_membership_by_user.get(assigned_membership.user_id, False) or assigned_membership.is_active
+        )
+        assigned_team_ids_by_user.setdefault(assigned_membership.user_id, []).append(str(assigned_membership.team_id))
+        assigned_team_labels_by_user.setdefault(assigned_membership.user_id, []).append(
+            f"{assigned_membership.team.sport.name} - {assigned_membership.team.get_gender_display()} {assigned_membership.team.name}"
+        )
+        assigned_sport_ids_by_user.setdefault(assigned_membership.user_id, set()).add(str(assigned_membership.team.sport_id))
+        assigned_sport_labels_by_user.setdefault(assigned_membership.user_id, set()).add(assigned_membership.team.sport.name)
+        assigned_team_types_by_user.setdefault(assigned_membership.user_id, set()).add(assigned_membership.team.team_type)
+        assigned_team_type_labels_by_user.setdefault(assigned_membership.user_id, set()).add(team_type_labels.get(assigned_membership.team.team_type, assigned_membership.team.team_type))
     student_rows = []
-    for membership in memberships:
-        assigned_user_ids.add(membership.user_id)
-        student_rows.append({"membership": membership, "user": membership.user, "team": membership.team, "is_active": membership.is_active})
+    for user_id, membership in first_membership_by_user.items():
+        assigned_user_ids.add(user_id)
+        student_rows.append({
+            "membership": None,
+            "user": membership.user,
+            "team": None,
+            "is_active": membership.user.is_active and active_membership_by_user.get(user_id, False),
+            "assigned_team_ids": ",".join(assigned_team_ids_by_user.get(user_id, [])),
+            "assigned_team_labels": "; ".join(assigned_team_labels_by_user.get(user_id, [])),
+            "assigned_sport_ids": ",".join(sorted(assigned_sport_ids_by_user.get(user_id, set()))),
+            "assigned_sport_labels": ", ".join(sorted(assigned_sport_labels_by_user.get(user_id, set()))),
+            "assigned_team_types": ",".join(sorted(assigned_team_types_by_user.get(user_id, set()))),
+            "assigned_team_type_labels": ", ".join(sorted(assigned_team_type_labels_by_user.get(user_id, set()))),
+        })
     if is_admin_user(request.user):
         unassigned_students = User.objects.filter(profile__role=UserProfile.Role.MEMBER).exclude(pk__in=assigned_user_ids).select_related("profile").order_by("first_name", "last_name", "email")
         for student in unassigned_students:
-            student_rows.append({"membership": None, "user": student, "team": None, "is_active": student.is_active})
+            student_rows.append({"membership": None, "user": student, "team": None, "is_active": student.is_active, "assigned_team_ids": "", "assigned_team_labels": "", "assigned_sport_ids": "", "assigned_sport_labels": "", "assigned_team_types": "", "assigned_team_type_labels": ""})
     teams = allowed_teams.select_related("sport").order_by("sport__name", "name")
     sports = Sport.objects.filter(teams__in=allowed_teams, is_active=True).distinct().order_by("name")
     login_requests = LoginAccessRequest.objects.exclude(status=LoginAccessRequest.Status.APPROVED).order_by("status", "-requested_at") if is_admin_user(request.user) else []
@@ -1017,6 +1457,22 @@ def member_detail(request, pk):
         AttendanceRecord.Status.EARLY_EXIT,
     ]).count()
     attendance_percent = round((attended_records / total_records) * 100, 1) if total_records else None
+    attendance_sport_stats = []
+    sport_ids = set(memberships.values_list("team__sport_id", flat=True))
+    for sport in Sport.objects.filter(pk__in=sport_ids).order_by("name"):
+        sport_records = records.filter(session__team__sport=sport)
+        sport_total = sport_records.count()
+        sport_attended = sport_records.filter(status__in=[
+            AttendanceRecord.Status.PRESENT,
+            AttendanceRecord.Status.LATE,
+            AttendanceRecord.Status.EARLY_EXIT,
+        ]).count()
+        attendance_sport_stats.append({
+            "sport": sport,
+            "total": sport_total,
+            "attended": sport_attended,
+            "percent": round((sport_attended / sport_total) * 100, 1) if sport_total else None,
+        })
     breadcrumb_items = [
         {"label": "Dashboard", "url_name": "dashboard"},
         {"label": "Add Students", "url_name": "members"},
@@ -1029,6 +1485,7 @@ def member_detail(request, pk):
         "attendance_percent": attendance_percent,
         "attendance_total": total_records,
         "attendance_attended": attended_records,
+        "attendance_sport_stats": attendance_sport_stats,
         "breadcrumb_items": breadcrumb_items,
     })
 
@@ -1265,11 +1722,17 @@ def sessions_list(request):
     sessions = visible_sessions(request.user)
     if form.is_valid():
         sport = form.cleaned_data.get("sport")
+        gender = form.cleaned_data.get("gender")
+        team_type = form.cleaned_data.get("team_type")
         team = form.cleaned_data.get("team")
         start = form.cleaned_data.get("start_date")
         end = form.cleaned_data.get("end_date")
         if sport:
             sessions = sessions.filter(team__sport=sport)
+        if gender:
+            sessions = sessions.filter(team__gender=gender)
+        if team_type:
+            sessions = sessions.filter(team__team_type=team_type)
         if team:
             sessions = sessions.filter(team=team)
         if start:
@@ -1283,6 +1746,90 @@ def sessions_list(request):
     session_list = add_session_permissions(request.user, sessions)
     venues = Venue.objects.filter(is_active=True).order_by("name")
     return render(request, "core/sessions.html", {"sessions": session_list, "form": form, "teams": team_qs, "venues": venues, "can_schedule_any": can_schedule_any})
+
+
+@login_required
+def meetings_list(request):
+    preview = request.session.get("meeting_preview")
+    can_schedule_meeting = is_admin_user(request.user)
+    if request.method == "POST":
+        if not can_schedule_meeting:
+            messages.error(request, "You cannot schedule meetings.")
+            return redirect("meetings")
+        action = request.POST.get("action")
+        if action == "preview":
+            built = build_meeting_preview(request.POST, organizer=request.user)
+            if built["errors"]:
+                for error in built["errors"]:
+                    messages.error(request, error)
+            else:
+                request.session["meeting_preview"] = built
+                request.session.modified = True
+                return redirect("meetings")
+        elif action == "cancel_preview":
+            built = request.session.get("meeting_preview")
+            if built:
+                request.session["meeting_draft"] = built["data"]
+            request.session.pop("meeting_preview", None)
+            return redirect("meetings")
+        elif action == "confirm_create":
+            built = request.session.get("meeting_preview")
+            if not built:
+                messages.error(request, "Meeting preview expired. Please schedule again.")
+                return redirect("meetings")
+            data = built["data"]
+            preview_data = built.get("preview", {})
+            sports = Sport.objects.filter(pk__in=data["sport_ids"], is_active=True)
+            teams = Team.objects.filter(pk__in=data["team_ids"], is_active=True, sport__in=sports)
+            trainers = User.objects.filter(pk__in=data["trainer_ids"], is_active=True)
+            participants = User.objects.filter(pk__in=data["participant_ids"], is_active=True)
+            if not participants.exists():
+                messages.error(request, "No valid participants found.")
+                request.session.pop("meeting_preview", None)
+                return redirect("meetings")
+            with transaction.atomic():
+                meeting = Meeting.objects.create(
+                    title=data["title"],
+                    meeting_date=data["meeting_date"],
+                    start_time=data["start_time"],
+                    end_time=data["end_time"],
+                    venue=data["venue"],
+                    agenda=data["agenda"],
+                    scheduled_by=request.user,
+                )
+                meeting.sports.set(sports)
+                meeting.teams.set(teams)
+                meeting.trainers.set(trainers)
+                meeting.participants.set(participants)
+                create_notifications(
+                    participants,
+                    "New meeting scheduled",
+                    f"{meeting.title} scheduled on {preview_data.get('display_date') or data['meeting_date']} from {preview_data.get('display_start_time') or data['start_time']} to {preview_data.get('display_end_time') or data['end_time']} at {meeting.venue}.",
+                    actor=request.user,
+                    target_url=reverse("meetings"),
+                )
+            request.session.pop("meeting_preview", None)
+            messages.success(request, "Meeting scheduled and participants notified.")
+            return redirect("meetings")
+    meetings = visible_meetings(request.user).prefetch_related("sports", "teams", "trainers", "participants").select_related("scheduled_by")
+    sports = Sport.objects.filter(is_active=True).order_by("name")
+    teams = Team.objects.filter(is_active=True).select_related("sport").order_by("sport__name", "gender", "name")
+    venues = Venue.objects.filter(is_active=True).order_by("name")
+    trainers = User.objects.filter(
+        is_active=True,
+        profile__role__in=[UserProfile.Role.TRAINER, UserProfile.Role.COORDINATOR],
+    ).select_related("profile").order_by("first_name", "last_name", "email")
+    meeting_draft = request.session.pop("meeting_draft", None)
+    return render(request, "core/meetings.html", {
+        "meetings": meetings,
+        "sports": sports,
+        "teams": teams,
+        "venues": venues,
+        "trainers": trainers,
+        "meeting_preview": preview,
+        "meeting_draft": meeting_draft,
+        "can_schedule_meeting": can_schedule_meeting,
+    })
 
 
 @login_required
@@ -1337,12 +1884,36 @@ def delegate_attendance(request, pk):
         return redirect("sessions")
     form = DelegateForm(request.POST or None, session=session)
     if request.method == "POST" and form.is_valid():
-        delegate, created = AttendanceDelegate.objects.get_or_create(
+        current_delegate = AttendanceDelegate.objects.filter(session=session).select_related("assigned_to").first()
+        previous_delegate = current_delegate.assigned_to if current_delegate else None
+        reason = form.cleaned_data["reason"]
+        if form.cleaned_data.get("remove_delegate"):
+            if current_delegate:
+                current_delegate.delete()
+                AttendanceDelegateLog.objects.create(
+                    session=session,
+                    previous_delegate=previous_delegate,
+                    new_delegate=None,
+                    changed_by=request.user,
+                    reason=reason,
+                )
+                messages.success(request, "Attendance delegate removed.")
+            else:
+                messages.info(request, "No Session Incharge is currently assigned.")
+            return redirect("sessions")
+        new_delegate = form.cleaned_data["assigned_to"]
+        delegate, created = AttendanceDelegate.objects.update_or_create(
             session=session,
-            assigned_to=form.cleaned_data["assigned_to"],
-            defaults={"assigned_by": request.user, "reason": form.cleaned_data["reason"]},
+            defaults={"assigned_to": new_delegate, "assigned_by": request.user, "reason": reason},
         )
-        if created:
+        if created or previous_delegate != new_delegate:
+            AttendanceDelegateLog.objects.create(
+                session=session,
+                previous_delegate=previous_delegate,
+                new_delegate=new_delegate,
+                changed_by=request.user,
+                reason=reason,
+            )
             Notification.objects.create(
                 user=delegate.assigned_to,
                 actor=request.user,
@@ -1355,7 +1926,15 @@ def delegate_attendance(request, pk):
             )
         messages.success(request, "Attendance delegate assigned.")
         return redirect("sessions")
-    return render(request, "core/form.html", {"form": form, "title": "Assign Session Incharge", "back_url": reverse("sessions")})
+    current_delegate = AttendanceDelegate.objects.filter(session=session).select_related("assigned_to").first()
+    delegate_logs = AttendanceDelegateLog.objects.filter(session=session).select_related("previous_delegate", "new_delegate", "changed_by")[:10]
+    return render(request, "core/form.html", {
+        "form": form,
+        "title": "Assign Session Incharge",
+        "back_url": reverse("sessions"),
+        "current_delegate": current_delegate,
+        "delegate_logs": delegate_logs,
+    })
 
 
 @login_required
@@ -1528,12 +2107,18 @@ def reports(request, export_type=None):
     records = AttendanceRecord.objects.select_related("member", "session", "session__team", "session__team__sport")
     if form.is_valid():
         sport = form.cleaned_data.get("sport")
+        gender = form.cleaned_data.get("gender")
+        team_type = form.cleaned_data.get("team_type")
         team = form.cleaned_data.get("team")
         student = form.cleaned_data.get("student")
         start = form.cleaned_data.get("start_date")
         end = form.cleaned_data.get("end_date")
         if sport:
             records = records.filter(session__team__sport=sport)
+        if gender:
+            records = records.filter(session__team__gender=gender)
+        if team_type:
+            records = records.filter(session__team__team_type=team_type)
         if team:
             records = records.filter(session__team=team)
         if student:

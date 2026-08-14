@@ -1,0 +1,57 @@
+<div class="table-responsive">
+  <table class="table align-middle data-table">
+    <thead><tr><th>Meeting</th><th>Date</th><th>Time</th><th>Venue</th><th>Teams</th><th>Scheduled By</th><th class="text-end">Actions</th></tr></thead>
+    <tbody>
+      {% for meeting in meetings %}
+        <tr>
+          <td><strong>{{ meeting.title }}</strong><div class="text-muted small">{{ meeting.agenda|default:"-"|truncatechars:80 }}</div></td>
+          <td>{{ meeting.meeting_date|date:"d M Y" }}</td>
+          <td>{{ meeting.start_time|time:"h:i A" }} - {{ meeting.end_time|time:"h:i A" }}</td>
+          <td>{{ meeting.venue }}</td>
+          <td>{% for team in meeting.teams.all %}{{ team }}{% if not forloop.last %}; {% endif %}{% empty %}-{% endfor %}</td>
+          <td>{{ meeting.scheduled_by|default:"-" }}</td>
+          <td class="text-end">
+            <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#{{ meeting_details_modal_id|default:'meetingDetailsModal' }}" data-title="{{ meeting.title }}" data-date="{{ meeting.meeting_date|date:'d/m/Y' }}" data-time="{{ meeting.start_time|time:'h:i A' }} - {{ meeting.end_time|time:'h:i A' }}" data-venue="{{ meeting.venue }}" data-agenda="{{ meeting.agenda|default:'-' }}" data-sports="{% for sport in meeting.sports.all %}{{ sport.name }}{% if not forloop.last %}, {% endif %}{% empty %}-{% endfor %}" data-teams="{% for team in meeting.teams.all %}{{ team }}{% if not forloop.last %}; {% endif %}{% empty %}-{% endfor %}" data-trainers="{% for trainer in meeting.trainers.all %}{{ trainer.get_full_name|default:trainer.email }}{% if not forloop.last %}, {% endif %}{% empty %}-{% endfor %}" data-participants="{% for participant in meeting.participants.all %}{{ participant.get_full_name|default:participant.email }}{% if not forloop.last %}; {% endif %}{% empty %}-{% endfor %}" data-scheduled-by="{{ meeting.scheduled_by|default:'-' }}"><i class="bi bi-eye"></i> Show Details</button>
+          </td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="7" class="empty-state">No meetings found.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="modal fade" id="{{ meeting_details_modal_id|default:'meetingDetailsModal' }}" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">Meeting Details</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body detail-list">
+        <div><span>Meeting Title</span><strong data-field="detail-title"></strong></div>
+        <div><span>Date</span><strong data-field="detail-date"></strong></div>
+        <div><span>Time</span><strong data-field="detail-time"></strong></div>
+        <div><span>Venue</span><strong data-field="detail-venue"></strong></div>
+        <div><span>Agenda</span><strong data-field="detail-agenda"></strong></div>
+        <div><span>Sports</span><strong data-field="detail-sports"></strong></div>
+        <div><span>Teams</span><strong data-field="detail-teams"></strong></div>
+        <div><span>Trainers</span><strong data-field="detail-trainers"></strong></div>
+        <div><span>Participants</span><strong data-field="detail-participants"></strong></div>
+        <div><span>Scheduled By</span><strong data-field="detail-scheduled-by"></strong></div>
+      </div>
+      <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  (() => {
+    const modal = document.getElementById('{{ meeting_details_modal_id|default:"meetingDetailsModal" }}');
+    if (!modal) return;
+    modal.addEventListener('show.bs.modal', event => {
+      const button = event.relatedTarget;
+      ['title', 'date', 'time', 'venue', 'agenda', 'sports', 'teams', 'trainers', 'participants', 'scheduledBy'].forEach(key => {
+        const field = modal.querySelector(`[data-field="detail-${key.replace(/[A-Z]/g, m => '-' + m.toLowerCase())}"]`);
+        if (field) field.textContent = button?.dataset[key] || '-';
+      });
+    });
+  })();
+</script>

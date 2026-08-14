@@ -33,6 +33,7 @@ urlpatterns = [
     path("sessions/<int:pk>/attendance/", views.take_attendance, name="take_attendance"),
     path("sessions/<int:pk>/attendance/detail/<str:export_type>/", views.attendance_detail, name="attendance_detail_export"),
     path("sessions/<int:pk>/attendance/detail/", views.attendance_detail, name="attendance_detail"),
+    path("meetings/", views.meetings_list, name="meetings"),
     path("attendance/<int:pk>/edit/", views.edit_attendance, name="edit_attendance"),
     path("my-attendance/", views.my_attendance, name="my_attendance"),
     path("feedback/", views.feedback_list, name="feedback"),

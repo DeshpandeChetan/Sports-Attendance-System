@@ -156,10 +156,25 @@ class AttendanceDelegate(TimeStampedModel):
     reason = models.CharField(max_length=255, blank=True)
 
     class Meta:
-        unique_together = ("session", "assigned_to")
+        unique_together = (("session",),)
 
     def __str__(self):
         return f"{self.assigned_to} delegated for {self.session}"
+
+
+class AttendanceDelegateLog(TimeStampedModel):
+    session = models.ForeignKey(Session, on_delete=models.CASCADE, related_name="delegate_logs")
+    previous_delegate = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="previous_delegate_logs")
+    new_delegate = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="new_delegate_logs")
+    changed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name="delegate_changes_made")
+    changed_at = models.DateTimeField(auto_now_add=True)
+    reason = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        ordering = ["-changed_at"]
+
+    def __str__(self):
+        return f"{self.session}: {self.previous_delegate} -> {self.new_delegate}"
 
 
 class AttendanceRecord(TimeStampedModel):
@@ -194,6 +209,26 @@ class AttendanceEditLog(TimeStampedModel):
 
     def __str__(self):
         return f"{self.attendance_record} {self.old_status}->{self.new_status}"
+
+
+class Meeting(TimeStampedModel):
+    title = models.CharField(max_length=160)
+    meeting_date = models.DateField()
+    start_time = models.TimeField()
+    end_time = models.TimeField()
+    venue = models.CharField(max_length=160)
+    agenda = models.TextField(blank=True)
+    sports = models.ManyToManyField(Sport, related_name="meetings", blank=True)
+    teams = models.ManyToManyField(Team, related_name="meetings", blank=True)
+    trainers = models.ManyToManyField(settings.AUTH_USER_MODEL, related_name="trainer_meetings", blank=True)
+    participants = models.ManyToManyField(settings.AUTH_USER_MODEL, related_name="meetings", blank=True)
+    scheduled_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name="meetings_scheduled")
+
+    class Meta:
+        ordering = ["-meeting_date", "-start_time"]
+
+    def __str__(self):
+        return f"{self.title} ({self.meeting_date:%d %b %Y})"
 
 
 class Feedback(TimeStampedModel):

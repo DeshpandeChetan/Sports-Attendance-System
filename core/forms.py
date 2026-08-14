@@ -214,7 +214,8 @@ class SessionForm(BootstrapFormMixin, forms.ModelForm):
 
 
 class DelegateForm(BootstrapFormMixin, forms.Form):
-    assigned_to = forms.ModelChoiceField(queryset=User.objects.none())
+    assigned_to = forms.ModelChoiceField(queryset=User.objects.none(), required=False)
+    remove_delegate = forms.BooleanField(required=False, label="Remove current Session Incharge")
     reason = forms.CharField(max_length=255, required=False)
 
     def __init__(self, *args, **kwargs):
@@ -224,6 +225,19 @@ class DelegateForm(BootstrapFormMixin, forms.Form):
             memberships__team__sport=session.team.sport,
             memberships__is_active=True,
         ).distinct()
+        current_delegate = session.delegates.select_related("assigned_to").first()
+        if current_delegate:
+            self.fields["assigned_to"].initial = current_delegate.assigned_to
+
+    def clean(self):
+        cleaned = super().clean()
+        assigned_to = cleaned.get("assigned_to")
+        remove_delegate = cleaned.get("remove_delegate")
+        if assigned_to and remove_delegate:
+            self.add_error("remove_delegate", "Choose either a new Session Incharge or remove the current one.")
+        if not assigned_to and not remove_delegate:
+            self.add_error("assigned_to", "Select a Session Incharge or choose remove current Session Incharge.")
+        return cleaned
 
 
 class AttendanceEditForm(BootstrapFormMixin, forms.ModelForm):
@@ -263,6 +277,8 @@ class SessionFeedbackForm(BootstrapFormMixin, forms.ModelForm):
 
 class ReportFilterForm(BootstrapFormMixin, forms.Form):
     sport = forms.ModelChoiceField(queryset=Sport.objects.all(), required=False)
+    gender = forms.ChoiceField(choices=Team.TeamGender.choices, required=False)
+    team_type = forms.ChoiceField(choices=Team.TeamType.choices, required=False, label="Team Category")
     team = forms.ModelChoiceField(queryset=Team.objects.all(), required=False)
     student = forms.ModelChoiceField(queryset=User.objects.all(), required=False)
     start_date = forms.DateField(required=False, widget=forms.DateInput(attrs={"type": "date"}))

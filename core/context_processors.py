@@ -16,6 +16,7 @@ def breadcrumbs(request):
         "settings": "Settings",
         "deactivated_users": "Deleted / Deactivated Users",
         "sessions": "Schedule Practice",
+        "meetings": "Schedule Meeting",
         "attendance_detail": "Attendance Details",
         "take_attendance": "Take Attendance",
         "delegate_attendance": "Assign Session Incharge",

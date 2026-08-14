@@ -54,16 +54,16 @@
             <td>{{ row.user.profile.register_no|default:"-" }}</td>
             <td>{{ row.user.profile.department|default:"-" }}</td>
             <td>{{ row.user.profile.class_name|default:"-" }}</td>
-            <td>{% if row.team %}{{ row.team.sport.name }} - {{ row.team.get_gender_display }} {{ row.team.name }}{% else %}<span class="text-muted">Not assigned</span>{% endif %}</td>
-            <td>{% if row.membership %}{% if row.is_active %}<span class="badge text-bg-success">Active</span>{% else %}<span class="badge text-bg-secondary">Inactive</span>{% endif %}{% else %}<span class="badge text-bg-info">Approved</span>{% endif %}</td>
+            <td>{% if row.assigned_team_labels %}{{ row.assigned_team_labels }}{% else %}<span class="text-muted">Not assigned</span>{% endif %}</td>
+            <td>{% if row.is_active %}<span class="badge text-bg-success">Active</span>{% else %}<span class="badge text-bg-secondary">Inactive</span>{% endif %}</td>
             <td class="text-end">
               {% if can_manage_students %}
                 <div class="dropdown">
                   <button class="btn btn-sm btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown">Actions</button>
                   <ul class="dropdown-menu dropdown-menu-end">
-                    <li><button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#studentViewModal" data-name="{{ row.user.get_full_name|default:row.user.username }}" data-email="{{ row.user.email }}" data-mobile="{{ row.user.profile.phone|default:'-' }}" data-register-no="{{ row.user.profile.register_no|default:'-' }}" data-department="{{ row.user.profile.department|default:'-' }}" data-class-name="{{ row.user.profile.class_name|default:'-' }}" data-gender="{{ row.user.profile.gender|default:'-' }}" data-sport="{% if row.team %}{{ row.team.sport.name }}{% else %}-{% endif %}" data-team-type="{% if row.team %}{{ row.team.get_team_type_display }}{% else %}-{% endif %}" data-team="{% if row.team %}{{ row.team.sport.name }} - {{ row.team.get_gender_display }} {{ row.team.name }}{% else %}Not assigned{% endif %}" data-status="{% if row.membership %}{{ row.is_active|yesno:'Active,Inactive' }}{% else %}Approved{% endif %}"><i class="bi bi-eye"></i> View</button></li>
+                    <li><button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#studentViewModal" data-name="{{ row.user.get_full_name|default:row.user.username }}" data-email="{{ row.user.email }}" data-mobile="{{ row.user.profile.phone|default:'-' }}" data-register-no="{{ row.user.profile.register_no|default:'-' }}" data-department="{{ row.user.profile.department|default:'-' }}" data-class-name="{{ row.user.profile.class_name|default:'-' }}" data-gender="{{ row.user.profile.gender|default:'-' }}" data-sport="{% if row.assigned_sport_labels %}{{ row.assigned_sport_labels }}{% else %}-{% endif %}" data-team-type="{% if row.assigned_team_type_labels %}{{ row.assigned_team_type_labels }}{% else %}-{% endif %}" data-team="{% if row.assigned_team_labels %}{{ row.assigned_team_labels }}{% else %}Not assigned{% endif %}" data-status="{{ row.is_active|yesno:'Active,Inactive' }}"><i class="bi bi-eye"></i> View</button></li>
                     <li><a class="dropdown-item" href="{% url 'member_detail' row.user.pk %}"><i class="bi bi-card-list"></i> More Details</a></li>
-                    <li><button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#memberModal" data-mode="edit" data-id="{% if row.membership %}{{ row.membership.pk }}{% endif %}" data-user-id="{{ row.user.pk }}" data-name="{{ row.user.get_full_name|default:row.user.username }}" data-email="{{ row.user.email }}" data-mobile="{{ row.user.profile.phone }}" data-register-no="{{ row.user.profile.register_no }}" data-department="{{ row.user.profile.department }}" data-class-name="{{ row.user.profile.class_name }}" data-gender="{{ row.user.profile.gender }}" data-sport="{% if row.team %}{{ row.team.sport_id }}{% endif %}" data-team-type="{% if row.team %}{{ row.team.team_type }}{% endif %}" data-team="{% if row.team %}{{ row.team.pk }}{% endif %}" data-active="{{ row.is_active|yesno:'true,false' }}"><i class="bi bi-pencil"></i> Edit</button></li>
+                    <li><button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#memberModal" data-mode="edit" data-id="{% if row.membership %}{{ row.membership.pk }}{% endif %}" data-user-id="{{ row.user.pk }}" data-name="{{ row.user.get_full_name|default:row.user.username }}" data-email="{{ row.user.email }}" data-mobile="{{ row.user.profile.phone }}" data-register-no="{{ row.user.profile.register_no }}" data-department="{{ row.user.profile.department }}" data-class-name="{{ row.user.profile.class_name }}" data-gender="{{ row.user.profile.gender }}" data-sport="{% if row.team %}{{ row.team.sport_id }}{% endif %}" data-team-type="{% if row.team %}{{ row.team.team_type }}{% endif %}" data-team="{% if row.team %}{{ row.team.pk }}{% endif %}" data-assigned-sports="{{ row.assigned_sport_ids }}" data-assigned-team-types="{{ row.assigned_team_types }}" data-assigned-teams="{{ row.assigned_team_ids }}" data-active="{{ row.is_active|yesno:'true,false' }}"><i class="bi bi-pencil"></i> Edit</button></li>
                     <li><button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#memberConfirmModal" data-action="{% if row.is_active %}deactivate{% else %}activate{% endif %}" data-id="{% if row.membership %}{{ row.membership.pk }}{% endif %}" data-user-id="{{ row.user.pk }}" data-title="{% if row.is_active %}Deactivate{% else %}Activate{% endif %} Student" data-message="Confirm this student status change."><i class="bi bi-toggle-off"></i> {% if row.is_active %}Deactivate{% else %}Activate{% endif %}</button></li>
                     <li><button class="dropdown-item text-danger" data-bs-toggle="modal" data-bs-target="#memberConfirmModal" data-action="delete" data-id="{% if row.membership %}{{ row.membership.pk }}{% endif %}" data-user-id="{{ row.user.pk }}" data-title="Delete Student" data-message="{% if row.membership %}This removes the student from this team.{% else %}This deletes the student record.{% endif %}"><i class="bi bi-trash"></i> Delete</button></li>
                   </ul>
@@ -80,7 +80,7 @@
 </section>
 
 <div class="modal fade" id="memberModal" tabindex="-1">
-  <div class="modal-dialog modal-dialog-centered">
+  <div class="modal-dialog modal-xl modal-dialog-centered">
     <form class="modal-content" method="post">
       {% csrf_token %}
       <input type="hidden" name="action" data-field="action" value="create">
@@ -96,9 +96,46 @@
           <div class="col-md-6"><label class="form-label">Department</label><input class="form-control" name="department" data-field="department"></div>
           <div class="col-md-6"><label class="form-label">Class</label><input class="form-control" name="class_name" data-field="class-name"></div>
           <div class="col-md-6"><label class="form-label">Gender</label><select class="form-select" name="gender" data-field="gender"><option value="">Select Gender</option><option value="Male">Male</option><option value="Female">Female</option></select></div>
-          <div class="col-md-6"><label class="form-label">Sport</label><select class="form-select" name="sport" data-field="sport"><option value="">Select Sport</option>{% for sport in sports %}<option value="{{ sport.pk }}">{{ sport.name }}</option>{% endfor %}</select></div>
-          <div class="col-md-6"><label class="form-label">Team Type</label><select class="form-select" name="team_type" data-field="team-type"><option value="">Select Team Type</option>{% for value,label in team_types %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></div>
-          <div class="col-md-6"><label class="form-label">Team</label><select class="form-select" name="team" data-field="team"><option value="">Select Team</option>{% for team in teams %}<option value="{{ team.pk }}" data-sport="{{ team.sport_id }}" data-type="{{ team.team_type }}">{{ team.sport.name }} - {{ team.get_team_type_display }} - {{ team.get_gender_display }} {{ team.name }}</option>{% endfor %}</select></div>
+          <div class="col-md-6">
+            <label class="form-label">Sports</label>
+            <div class="membership-select-list" data-field="sport-list">
+              {% for sport in sports %}
+                <label class="membership-select-item">
+                  <input class="form-check-input" type="checkbox" name="sports" value="{{ sport.pk }}" data-field="sport-check">
+                  <span>{{ sport.name }}</span>
+                  <i class="bi bi-check-lg"></i>
+                </label>
+              {% empty %}
+                <p class="text-muted mb-0">No sports available.</p>
+              {% endfor %}
+            </div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Team Types</label>
+            <div class="membership-select-list" data-field="team-type-list">
+              {% for value,label in team_types %}
+                <label class="membership-select-item">
+                  <input class="form-check-input" type="checkbox" name="team_types" value="{{ value }}" data-field="team-type-check">
+                  <span>{{ label }}</span>
+                  <i class="bi bi-check-lg"></i>
+                </label>
+              {% endfor %}
+            </div>
+          </div>
+          <div class="col-12">
+            <label class="form-label">Teams</label>
+            <div class="team-check-list" data-field="team-list">
+              {% for team in teams %}
+                <label class="team-check-item" data-sport="{{ team.sport_id }}" data-type="{{ team.team_type }}" data-gender="{{ team.gender }}">
+                  <input class="form-check-input" type="checkbox" name="teams" value="{{ team.pk }}" data-team-name="{{ team.sport.name }} - {{ team.get_gender_display }} {{ team.name }}" data-field="team-check">
+                  <span>{{ team.sport.name }} - {{ team.get_team_type_display }} - {{ team.get_gender_display }} {{ team.name }}</span>
+                  <i class="bi bi-check-lg"></i>
+                </label>
+              {% empty %}
+                <p class="text-muted mb-0">No teams available.</p>
+              {% endfor %}
+            </div>
+          </div>
         </div>
         <div class="form-check mt-3"><input class="form-check-input" type="checkbox" name="is_active" data-field="active" checked><label class="form-check-label">Active</label></div>
       </div>
@@ -142,6 +179,15 @@
     </form>
   </div>
 </div>
+<div class="modal fade" id="teamRemoveConfirmModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">Remove Team Membership</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body"><p class="mb-0" data-field="team-remove-message"></p></div>
+      <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-action="cancel-remove" data-bs-dismiss="modal">Cancel</button><button class="btn btn-danger" type="button" data-action="confirm-remove" data-bs-dismiss="modal">Confirm</button></div>
+    </div>
+  </div>
+</div>
 {% if can_manage_students and teams %}
   {% include "partials/bulk_upload_modal.html" with bulk_kind="students" bulk_title="Students" %}
 {% endif %}
@@ -149,30 +195,71 @@
 
 {% block scripts %}
 <script>
-  function filterStudentTeams(modal) {
-    const sport = modal.querySelector('[data-field="sport"]')?.value || '';
-    const teamType = modal.querySelector('[data-field="team-type"]')?.value || '';
-    const team = modal.querySelector('[data-field="team"]');
-    if (!team) return;
-    let selectedVisible = false;
-    team.querySelectorAll('option').forEach(option => {
-      if (!option.value) return;
-      const isVisible = (!sport || option.dataset.sport === sport) && (!teamType || option.dataset.type === teamType);
-      option.hidden = !isVisible;
-      if (option.selected && isVisible) selectedVisible = true;
-    });
-    if (team.value && !selectedVisible) team.value = '';
+  let pendingTeamRemovalCheckbox = null;
+
+  function checkedValues(modal, field) {
+    return new Set(Array.from(modal.querySelectorAll(`[data-field="${field}"]:checked`)).map(input => input.value));
   }
 
-  function syncStudentTeamMeta(modal) {
-    const team = modal.querySelector('[data-field="team"]');
-    const selected = team?.selectedOptions?.[0];
-    if (!selected || !selected.value) return;
-    const sport = modal.querySelector('[data-field="sport"]');
-    const teamType = modal.querySelector('[data-field="team-type"]');
-    if (sport && selected.dataset.sport) sport.value = selected.dataset.sport;
-    if (teamType && selected.dataset.type) teamType.value = selected.dataset.type;
-    filterStudentTeams(modal);
+  function syncParentChecksFromTeams(modal) {
+    const selectedSports = new Set();
+    const selectedTypes = new Set();
+    modal.querySelectorAll('[data-field="team-check"]:checked').forEach(input => {
+      const item = input.closest('.team-check-item');
+      if (item?.dataset.sport) selectedSports.add(item.dataset.sport);
+      if (item?.dataset.type) selectedTypes.add(item.dataset.type);
+    });
+    modal.querySelectorAll('[data-field="sport-check"]').forEach(input => {
+      input.checked = selectedSports.has(input.value);
+    });
+    modal.querySelectorAll('[data-field="team-type-check"]').forEach(input => {
+      input.checked = selectedTypes.has(input.value);
+    });
+  }
+
+  function syncTeamCategoryRestrictions(modal) {
+    const selectedGroups = new Set();
+    modal.querySelectorAll('[data-field="team-check"]:checked').forEach(input => {
+      const item = input.closest('.team-check-item');
+      if (item?.dataset.sport && item?.dataset.gender) selectedGroups.add(`${item.dataset.sport}:${item.dataset.gender}`);
+    });
+    modal.querySelectorAll('[data-field="team-check"]').forEach(input => {
+      const item = input.closest('.team-check-item');
+      const group = `${item?.dataset.sport || ''}:${item?.dataset.gender || ''}`;
+      const blocked = !input.checked && selectedGroups.has(group);
+      input.disabled = blocked;
+      item?.classList.toggle('is-disabled', blocked);
+      item?.setAttribute('title', blocked ? 'A student can belong to only one Team Category within the same Sport and Gender.' : '');
+    });
+  }
+
+  function filterStudentTeams(modal) {
+    const sports = checkedValues(modal, 'sport-check');
+    const teamTypes = checkedValues(modal, 'team-type-check');
+    modal.querySelectorAll('.team-check-item').forEach(item => {
+      const isVisible = (!sports.size || sports.has(item.dataset.sport)) && (!teamTypes.size || teamTypes.has(item.dataset.type));
+      item.classList.toggle('d-none', !isVisible);
+    });
+    syncTeamCategoryRestrictions(modal);
+  }
+
+  function syncAssignedSelections(modal, assignedSports, assignedTeamTypes, assignedTeams) {
+    const sports = new Set((assignedSports || '').split(',').filter(Boolean));
+    const teamTypes = new Set((assignedTeamTypes || '').split(',').filter(Boolean));
+    const assigned = new Set((assignedTeams || '').split(',').filter(Boolean));
+    modal.querySelectorAll('[data-field="sport-check"]').forEach(input => {
+      input.checked = sports.has(input.value);
+    });
+    modal.querySelectorAll('[data-field="team-type-check"]').forEach(input => {
+      input.checked = teamTypes.has(input.value);
+    });
+    modal.querySelectorAll('[data-field="team-check"]').forEach(input => {
+      input.checked = assigned.has(input.value);
+      input.dataset.originallyAssigned = input.checked ? 'true' : 'false';
+      input.disabled = false;
+    });
+    syncParentChecksFromTeams(modal);
+    syncTeamCategoryRestrictions(modal);
   }
 
   document.getElementById('memberModal')?.addEventListener('show.bs.modal', event => {
@@ -181,21 +268,78 @@
     const mode = b?.dataset.mode || 'create';
     modal.querySelector('.modal-title').textContent = mode === 'edit' ? 'Edit Student' : 'Add Student';
     modal.querySelector('[data-field="action"]').value = mode === 'edit' ? 'update' : 'create';
-    ['id','userId','name','email','mobile','registerNo','department','className','gender','sport','teamType','team'].forEach(key => {
+    ['id','userId','name','email','mobile','registerNo','department','className','gender'].forEach(key => {
       const field = modal.querySelector(`[data-field="${key.replace(/[A-Z]/g, m => '-' + m.toLowerCase())}"]`);
       if (field) field.value = b?.dataset[key] || '';
     });
     modal.querySelector('[data-field="active"]').checked = b?.dataset.active !== 'false';
+    syncAssignedSelections(
+      modal,
+      b?.dataset.assignedSports || (b?.dataset.sport ? b.dataset.sport : ''),
+      b?.dataset.assignedTeamTypes || (b?.dataset.teamType ? b.dataset.teamType : ''),
+      b?.dataset.assignedTeams || (b?.dataset.team ? b.dataset.team : '')
+    );
     filterStudentTeams(modal);
   });
-  document.getElementById('memberModal')?.querySelector('[data-field="sport"]')?.addEventListener('change', event => {
-    filterStudentTeams(event.target.closest('#memberModal'));
+  document.getElementById('memberModal')?.querySelectorAll('[data-field="sport-check"], [data-field="team-type-check"]').forEach(input => {
+    input.addEventListener('change', event => {
+      const checkbox = event.target;
+      const modal = checkbox.closest('#memberModal');
+      if (!checkbox.checked) {
+        const isSport = checkbox.dataset.field === 'sport-check';
+        modal.querySelectorAll('[data-field="team-check"]').forEach(teamInput => {
+          const item = teamInput.closest('.team-check-item');
+          if ((isSport && item?.dataset.sport === checkbox.value) || (!isSport && item?.dataset.type === checkbox.value)) {
+            teamInput.checked = false;
+            teamInput.disabled = false;
+          }
+        });
+        syncParentChecksFromTeams(modal);
+      }
+      filterStudentTeams(modal);
+    });
   });
-  document.getElementById('memberModal')?.querySelector('[data-field="team-type"]')?.addEventListener('change', event => {
-    filterStudentTeams(event.target.closest('#memberModal'));
+  document.getElementById('memberModal')?.querySelectorAll('[data-field="team-check"]').forEach(input => {
+    input.addEventListener('change', event => {
+      const checkbox = event.target;
+      if (checkbox.dataset.originallyAssigned === 'true' && !checkbox.checked) {
+        pendingTeamRemovalCheckbox = checkbox;
+        checkbox.checked = true;
+        const studentName = document.querySelector('#memberModal [data-field="name"]')?.value || 'this student';
+        const teamName = checkbox.dataset.teamName || 'this team';
+        const modal = document.getElementById('teamRemoveConfirmModal');
+        modal.querySelector('[data-field="team-remove-message"]').textContent = `Are you sure you want to remove ${studentName} from ${teamName}?`;
+        bootstrap.Modal.getOrCreateInstance(modal).show();
+      }
+      if (checkbox.checked) {
+        const item = checkbox.closest('.team-check-item');
+        const memberModal = checkbox.closest('#memberModal');
+        const sportInput = memberModal.querySelector(`[data-field="sport-check"][value="${item?.dataset.sport}"]`);
+        const typeInput = memberModal.querySelector(`[data-field="team-type-check"][value="${item?.dataset.type}"]`);
+        if (sportInput) sportInput.checked = true;
+        if (typeInput) typeInput.checked = true;
+      } else {
+        syncParentChecksFromTeams(checkbox.closest('#memberModal'));
+      }
+      syncTeamCategoryRestrictions(checkbox.closest('#memberModal'));
+      filterStudentTeams(checkbox.closest('#memberModal'));
+    });
   });
-  document.getElementById('memberModal')?.querySelector('[data-field="team"]')?.addEventListener('change', event => {
-    syncStudentTeamMeta(event.target.closest('#memberModal'));
+  document.querySelector('[data-action="confirm-remove"]')?.addEventListener('click', () => {
+    if (pendingTeamRemovalCheckbox) {
+      pendingTeamRemovalCheckbox.checked = false;
+      syncParentChecksFromTeams(pendingTeamRemovalCheckbox.closest('#memberModal'));
+      filterStudentTeams(pendingTeamRemovalCheckbox.closest('#memberModal'));
+    }
+    pendingTeamRemovalCheckbox = null;
+  });
+  document.querySelector('[data-action="cancel-remove"]')?.addEventListener('click', () => {
+    if (pendingTeamRemovalCheckbox) pendingTeamRemovalCheckbox.checked = true;
+    pendingTeamRemovalCheckbox = null;
+  });
+  document.getElementById('teamRemoveConfirmModal')?.addEventListener('hidden.bs.modal', () => {
+    if (pendingTeamRemovalCheckbox) pendingTeamRemovalCheckbox.checked = true;
+    pendingTeamRemovalCheckbox = null;
   });
   document.getElementById('studentViewModal')?.addEventListener('show.bs.modal', event => {
     const b = event.relatedTarget;
