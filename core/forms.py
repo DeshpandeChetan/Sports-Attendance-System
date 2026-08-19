@@ -5,8 +5,23 @@ from django.utils import timezone
 from datetime import datetime, time
 
 from .models import AttendanceRecord, Feedback, Membership, Session, Sport, Team, UserProfile, Venue
+from .email_validation import INVALID_CHRIST_EMAIL_MESSAGE, validate_christ_email
 
 User = get_user_model()
+
+REGISTRATION_NUMBER_EXISTS_MESSAGE = "This registration number already exists"
+
+
+def validate_profile_register_no(register_no, user=None):
+    register_no = str(register_no or "").strip()
+    if not register_no:
+        return register_no
+    existing = UserProfile.objects.filter(register_no__iexact=register_no)
+    if user and user.pk:
+        existing = existing.exclude(user=user)
+    if existing.exists():
+        raise forms.ValidationError(REGISTRATION_NUMBER_EXISTS_MESSAGE)
+    return register_no
 
 
 class BootstrapFormMixin:
@@ -125,6 +140,12 @@ class UserRoleForm(BootstrapFormMixin, forms.ModelForm):
             profile.save()
         return profile
 
+    def clean_email(self):
+        try:
+            return validate_christ_email(self.cleaned_data["email"])
+        except ValueError:
+            raise forms.ValidationError(INVALID_CHRIST_EMAIL_MESSAGE)
+
 
 class ProfileForm(BootstrapFormMixin, forms.ModelForm):
     first_name = forms.CharField(max_length=150, required=False)
@@ -153,6 +174,9 @@ class ProfileForm(BootstrapFormMixin, forms.ModelForm):
         if image and hasattr(image, "content_type") and not image.content_type.startswith("image/"):
             raise forms.ValidationError("Only image files can be uploaded.")
         return image
+
+    def clean_register_no(self):
+        return validate_profile_register_no(self.cleaned_data.get("register_no"), self.user_instance)
 
     def save(self, commit=True):
         profile = super().save(commit=False)
@@ -276,10 +300,46 @@ class SessionFeedbackForm(BootstrapFormMixin, forms.ModelForm):
 
 
 class ReportFilterForm(BootstrapFormMixin, forms.Form):
+    REPORT_TYPES = [
+        ("attendance", "Attendance Report"),
+        ("sessions", "Practice Session Report"),
+        ("gender", "Gender-wise Report"),
+        ("sports_teams", "Sports & Team Report"),
+        ("trainer", "Trainer Activity Report"),
+        ("feedback", "Feedback Report"),
+    ]
+    SESSION_STATUS_CHOICES = [
+        ("", "Select Session Status"),
+        ("SCHEDULED", "Scheduled"),
+        ("UPCOMING", "Upcoming"),
+        ("COMPLETED", "Completed"),
+    ]
+
+    report_type = forms.ChoiceField(choices=REPORT_TYPES, initial="attendance")
     sport = forms.ModelChoiceField(queryset=Sport.objects.all(), required=False)
     gender = forms.ChoiceField(choices=Team.TeamGender.choices, required=False)
     team_type = forms.ChoiceField(choices=Team.TeamType.choices, required=False, label="Team Category")
     team = forms.ModelChoiceField(queryset=Team.objects.all(), required=False)
+    session = forms.ModelChoiceField(queryset=Session.objects.select_related("team", "team__sport").all(), required=False, label="Practice Session")
+    trainer = forms.ModelChoiceField(
+        queryset=User.objects.filter(profile__role__in=[UserProfile.Role.TRAINER, UserProfile.Role.COORDINATOR]).distinct(),
+        required=False,
+    )
     student = forms.ModelChoiceField(queryset=User.objects.all(), required=False)
+    attendance_status = forms.ChoiceField(choices=AttendanceRecord.Status.choices, required=False, label="Attendance Status")
+    venue = forms.ChoiceField(choices=[], required=False)
+    session_status = forms.ChoiceField(choices=SESSION_STATUS_CHOICES, required=False)
     start_date = forms.DateField(required=False, widget=forms.DateInput(attrs={"type": "date"}))
     end_date = forms.DateField(required=False, widget=forms.DateInput(attrs={"type": "date"}))
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        venue_values = Session.objects.exclude(venue="").order_by("venue").values_list("venue", flat=True).distinct()
+        self.fields["venue"].choices = [("", "Select Venue")] + [(venue, venue) for venue in venue_values]
+        self.fields["student"].queryset = User.objects.filter(
+            Q(profile__role=UserProfile.Role.MEMBER)
+            | Q(profile__role=UserProfile.Role.CAPTAIN)
+            | Q(profile__role=UserProfile.Role.VICE_CAPTAIN)
+        ).distinct().order_by("first_name", "last_name", "email")
+        self.fields["team"].queryset = Team.objects.select_related("sport").order_by("sport__name", "gender", "team_type", "name")
+        self.fields["session"].queryset = Session.objects.select_related("team", "team__sport").order_by("-start_at")

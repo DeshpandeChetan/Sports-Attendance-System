@@ -1,0 +1,7 @@
+
+
+
+
+**Super Admin is not meaningfully differentiated from Admin inside the custom app.**
+**Operational Admin role is named SUB_ADMIN but displayed as “Coordinator,” which can be confusing**
+

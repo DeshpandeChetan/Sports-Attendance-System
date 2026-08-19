@@ -9,9 +9,12 @@ from django.db import transaction
 from django.db.models import Count, Q
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.conf import settings
 from django.urls import reverse
 from django.utils import timezone
 from openpyxl import Workbook, load_workbook
+from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.utils import get_column_letter
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from allauth.socialaccount.models import SocialApp
@@ -29,6 +32,7 @@ from .forms import (
     TeamForm,
     VenueForm,
 )
+from .email_validation import validate_christ_email
 from .models import (
     AttendanceDelegate,
     AttendanceDelegateLog,
@@ -624,9 +628,11 @@ def save_student_record(full_name, email, department="", class_name="", phone=""
     register_no = str(register_no or "").strip()
     if not email:
         raise ValueError("Student email is required.")
+    email = validate_christ_email(email)
     if phone and not re.fullmatch(r"\d{10}", phone):
         raise ValueError("Mobile number must be exactly 10 digits.")
     user = existing_user or User.objects.filter(email__iexact=email).first()
+    validate_unique_register_no(register_no, user)
     if user is None:
         user = User(username=email, email=email)
         user.set_unusable_password()
@@ -646,6 +652,17 @@ def save_student_record(full_name, email, department="", class_name="", phone=""
     return user
 
 
+def validate_unique_register_no(register_no, user=None):
+    register_no = str(register_no or "").strip()
+    if not register_no:
+        return
+    existing = UserProfile.objects.filter(register_no__iexact=register_no)
+    if user and user.pk:
+        existing = existing.exclude(user=user)
+    if existing.exists():
+        raise ValueError("This registration number already exists")
+
+
 def build_student_from_post(request, existing_user=None):
     full_name = request.POST.get("student_name", "").strip()
     email = request.POST.get("student_email", "").strip().lower()
@@ -658,12 +675,13 @@ def build_student_from_post(request, existing_user=None):
 
 
 def create_student_from_access_request(access_request):
-    user = User.objects.filter(email__iexact=access_request.email).first()
+    email = validate_christ_email(access_request.email)
+    user = User.objects.filter(email__iexact=email).first()
     if user is None:
-        user = User(username=access_request.email, email=access_request.email)
+        user = User(username=email, email=email)
         user.set_unusable_password()
-    user.email = access_request.email
-    user.username = access_request.email
+    user.email = email
+    user.username = email
     if access_request.full_name:
         parts = access_request.full_name.split(" ", 1)
         user.first_name = parts[0]
@@ -846,10 +864,20 @@ def import_trainers_from_file(uploaded_file):
             continue
         email = str(row.get("trainer_email") or "").strip().lower()
         phone = str(row.get("mobile_number") or "").strip()
+        try:
+            email = validate_christ_email(email)
+        except ValueError as exc:
+            errors.append(f"Row {index}: {exc}")
+            continue
         if phone and not re.fullmatch(r"\d{10}", phone):
             errors.append(f"Row {index}: Mobile number must be exactly 10 digits.")
             continue
         trainer = User.objects.filter(email__iexact=email).first()
+        try:
+            validate_unique_register_no(row.get("reg_no") or row.get("register_no"), trainer)
+        except ValueError as exc:
+            errors.append(f"Row {index}: {exc}")
+            continue
         if trainer is None:
             trainer = User(username=email, email=email)
             trainer.set_unusable_password()
@@ -1204,6 +1232,12 @@ def members_list(request):
             if not is_admin_user(request.user):
                 messages.error(request, "You cannot manage login requests.")
                 return redirect("members")
+            if action == "approve_request":
+                try:
+                    validate_christ_email(access_request.email)
+                except ValueError as exc:
+                    messages.error(request, str(exc))
+                    return redirect("members")
             with transaction.atomic():
                 access_request.status = LoginAccessRequest.Status.APPROVED if action == "approve_request" else LoginAccessRequest.Status.REJECTED
                 access_request.reviewed_by = request.user
@@ -1426,6 +1460,7 @@ def members_list(request):
     teams = allowed_teams.select_related("sport").order_by("sport__name", "name")
     sports = Sport.objects.filter(teams__in=allowed_teams, is_active=True).distinct().order_by("name")
     login_requests = LoginAccessRequest.objects.exclude(status=LoginAccessRequest.Status.APPROVED).order_by("status", "-requested_at") if is_admin_user(request.user) else []
+    registration_numbers = list(UserProfile.objects.exclude(register_no="").values("user_id", "register_no"))
     return render(request, "core/members.html", {
         "memberships": memberships,
         "student_rows": student_rows,
@@ -1435,6 +1470,7 @@ def members_list(request):
         "login_requests": login_requests,
         "can_manage_students": can_manage_students,
         "is_admin_user": is_admin_user(request.user),
+        "registration_numbers": registration_numbers,
     })
 
 
@@ -1507,10 +1543,20 @@ def trainers_list(request):
             if not email:
                 messages.error(request, "Trainer email is required.")
                 return redirect("trainers")
+            try:
+                email = validate_christ_email(email)
+            except ValueError as exc:
+                messages.error(request, str(exc))
+                return redirect("trainers")
             if phone and not re.fullmatch(r"\d{10}", phone):
                 messages.error(request, "Mobile number must be exactly 10 digits.")
                 return redirect("trainers")
             trainer = trainer or User.objects.filter(email__iexact=email).first()
+            try:
+                validate_unique_register_no(register_no, trainer)
+            except ValueError as exc:
+                messages.error(request, str(exc))
+                return redirect("trainers")
             if trainer is None:
                 trainer = User(username=email, email=email)
                 trainer.set_unusable_password()
@@ -1564,7 +1610,8 @@ def trainers_list(request):
         | Q(coordinated_teams__isnull=False)
     ).distinct().prefetch_related("coordinated_teams__sport").order_by("first_name", "last_name", "email")
     teams = Team.objects.filter(is_active=True).select_related("sport").order_by("sport__name", "gender", "name")
-    return render(request, "core/trainers.html", {"trainers": trainers, "teams": teams})
+    registration_numbers = list(UserProfile.objects.exclude(register_no="").values("user_id", "register_no"))
+    return render(request, "core/trainers.html", {"trainers": trainers, "teams": teams, "registration_numbers": registration_numbers})
 
 
 @login_required
@@ -2104,79 +2151,623 @@ def send_feedback(request):
 @role_required(*ADMIN_ROLES)
 def reports(request, export_type=None):
     form = ReportFilterForm(request.GET or None)
-    records = AttendanceRecord.objects.select_related("member", "session", "session__team", "session__team__sport")
-    if form.is_valid():
-        sport = form.cleaned_data.get("sport")
-        gender = form.cleaned_data.get("gender")
-        team_type = form.cleaned_data.get("team_type")
-        team = form.cleaned_data.get("team")
-        student = form.cleaned_data.get("student")
-        start = form.cleaned_data.get("start_date")
-        end = form.cleaned_data.get("end_date")
-        if sport:
-            records = records.filter(session__team__sport=sport)
-        if gender:
-            records = records.filter(session__team__gender=gender)
-        if team_type:
-            records = records.filter(session__team__team_type=team_type)
-        if team:
-            records = records.filter(session__team=team)
-        if student:
-            records = records.filter(member=student)
-        if start:
-            records = records.filter(session__start_at__date__gte=start)
-        if end:
-            records = records.filter(session__start_at__date__lte=end)
-    records = records.order_by("-session__start_at")
+    report = build_report(form.cleaned_data if form.is_valid() else {})
     if export_type == "excel":
-        return export_excel(records)
+        return export_report_excel(report)
     if export_type == "pdf":
-        return export_pdf(records)
-    return render(request, "core/reports.html", {"form": form, "records": records[:300]})
+        return export_report_pdf(report)
+    return render(request, "core/reports.html", {
+        "form": form,
+        "report": report,
+        "report_filter_data": report_filter_dependency_data(),
+    })
 
 
-def export_excel(records):
+def report_filter_dependency_data():
+    teams = Team.objects.select_related("sport").order_by("sport__name", "gender", "team_type", "name")
+    sessions = Session.objects.select_related("team", "team__sport").order_by("-start_at")
+    students = User.objects.filter(
+        Q(memberships__is_active=True)
+        | Q(captained_teams__isnull=False)
+        | Q(vice_captained_teams__isnull=False),
+        is_active=True,
+    ).distinct().prefetch_related("memberships__team__sport").order_by("first_name", "last_name", "email")
+    trainers = User.objects.filter(
+        profile__role__in=[UserProfile.Role.TRAINER, UserProfile.Role.COORDINATOR],
+        is_active=True,
+    ).distinct().order_by("first_name", "last_name", "email")
+    venues = Session.objects.exclude(venue="").order_by("venue").values_list("venue", flat=True).distinct()
+    return {
+        "teams": [
+            {
+                "id": team.pk,
+                "label": str(team),
+                "sport": team.sport_id,
+                "gender": team.gender,
+                "team_type": team.team_type,
+            }
+            for team in teams
+        ],
+        "sessions": [
+            {
+                "id": session.pk,
+                "label": f"{session.title or 'Practice session'} - {session.team} ({session.start_at:%d %b %Y})",
+                "team": session.team_id,
+                "sport": session.team.sport_id,
+                "gender": session.team.gender,
+                "team_type": session.team.team_type,
+            }
+            for session in sessions
+        ],
+        "students": [
+            {
+                "id": student.pk,
+                "label": user_label(student),
+                "teams": list(student.memberships.filter(is_active=True).values_list("team_id", flat=True)),
+                "sports": list(student.memberships.filter(is_active=True).values_list("team__sport_id", flat=True).distinct()),
+                "genders": list(student.memberships.filter(is_active=True).values_list("team__gender", flat=True).distinct()),
+                "team_types": list(student.memberships.filter(is_active=True).values_list("team__team_type", flat=True).distinct()),
+            }
+            for student in students
+        ],
+        "trainers": [
+            {
+                "id": trainer.pk,
+                "label": user_label(trainer),
+                "teams": list(trainer.coordinated_teams.values_list("pk", flat=True)),
+                "sports": list(trainer.coordinated_teams.values_list("sport_id", flat=True).distinct()),
+                "genders": list(trainer.coordinated_teams.values_list("gender", flat=True).distinct()),
+                "team_types": list(trainer.coordinated_teams.values_list("team_type", flat=True).distinct()),
+            }
+            for trainer in trainers
+        ],
+        "venues": [{"value": venue, "label": venue} for venue in venues],
+    }
+
+
+def percent_value(part, total):
+    return round((part / total) * 100, 1) if total else 0
+
+
+def report_cell(value, badge=""):
+    return {"value": value if value not in {None, ""} else "-", "badge": badge}
+
+
+def status_badge(status):
+    return {
+        AttendanceRecord.Status.PRESENT: "success",
+        AttendanceRecord.Status.ABSENT: "danger",
+        AttendanceRecord.Status.LATE: "warning",
+        AttendanceRecord.Status.EARLY_EXIT: "info",
+        "COMPLETED": "success",
+        "UPCOMING": "primary",
+        "SCHEDULED": "secondary",
+    }.get(status, "")
+
+
+def report_filter_labels(cleaned, report_type):
+    relevant = {
+        "attendance": ["sport", "gender", "team_type", "team", "session", "trainer", "student", "attendance_status", "start_date", "end_date"],
+        "sessions": ["sport", "gender", "team_type", "team", "trainer", "venue", "session_status", "start_date", "end_date"],
+        "gender": ["sport", "gender", "team_type", "trainer", "start_date", "end_date"],
+        "sports_teams": ["sport", "gender", "team_type", "team", "trainer", "start_date", "end_date"],
+        "trainer": ["trainer", "sport", "gender", "team_type", "team", "start_date", "end_date"],
+        "feedback": ["sport", "gender", "team_type", "team", "session", "trainer", "student", "start_date", "end_date"],
+    }.get(report_type, [])
+    labels = {
+        "sport": "Sport",
+        "gender": "Gender",
+        "team_type": "Team Category",
+        "team": "Team",
+        "session": "Practice Session",
+        "trainer": "Trainer",
+        "student": "Student",
+        "attendance_status": "Attendance Status",
+        "venue": "Venue",
+        "session_status": "Session Status",
+        "start_date": "Start Date",
+        "end_date": "End Date",
+    }
+    values = []
+    for key in relevant:
+        value = cleaned.get(key)
+        if not value:
+            continue
+        display = value
+        if key == "gender":
+            display = dict(Team.TeamGender.choices).get(value, value)
+        elif key == "team_type":
+            display = dict(Team.TeamType.choices).get(value, value)
+        elif key == "attendance_status":
+            display = dict(AttendanceRecord.Status.choices).get(value, value)
+        elif key == "session_status":
+            display = dict(ReportFilterForm.SESSION_STATUS_CHOICES).get(value, value)
+        elif key in {"start_date", "end_date"}:
+            display = value.strftime("%d %b %Y")
+        values.append({"label": labels[key], "value": display})
+    return values
+
+
+def apply_session_filters(sessions, cleaned):
+    sport = cleaned.get("sport")
+    gender = cleaned.get("gender")
+    team_type = cleaned.get("team_type")
+    team = cleaned.get("team")
+    trainer = cleaned.get("trainer")
+    venue = cleaned.get("venue")
+    session_status = cleaned.get("session_status")
+    start = cleaned.get("start_date")
+    end = cleaned.get("end_date")
+    today = timezone.localdate()
+    if sport:
+        sessions = sessions.filter(team__sport=sport)
+    if gender:
+        sessions = sessions.filter(team__gender=gender)
+    if team_type:
+        sessions = sessions.filter(team__team_type=team_type)
+    if team:
+        sessions = sessions.filter(team=team)
+    if trainer:
+        sessions = sessions.filter(team__coordinator=trainer)
+    if venue:
+        sessions = sessions.filter(venue=venue)
+    if session_status == "COMPLETED":
+        sessions = sessions.filter(attendance_submitted=True)
+    elif session_status == "UPCOMING":
+        sessions = sessions.filter(start_at__date__gte=today, attendance_submitted=False)
+    elif session_status == "SCHEDULED":
+        sessions = sessions.filter(attendance_submitted=False)
+    if start:
+        sessions = sessions.filter(start_at__date__gte=start)
+    if end:
+        sessions = sessions.filter(start_at__date__lte=end)
+    return sessions
+
+
+def apply_attendance_filters(records, cleaned):
+    records = records.filter(session__in=apply_session_filters(Session.objects.all(), cleaned))
+    if cleaned.get("session"):
+        records = records.filter(session=cleaned["session"])
+    if cleaned.get("student"):
+        records = records.filter(member=cleaned["student"])
+    if cleaned.get("attendance_status"):
+        records = records.filter(status=cleaned["attendance_status"])
+    return records
+
+
+def report_base(title, report_type, cleaned):
+    return {
+        "type": report_type,
+        "title": title,
+        "university": "Christ (Deemed to be University), Pune Lavasa Campus",
+        "system": "Sports Attendance System",
+        "generated_at": timezone.localtime(),
+        "filters": report_filter_labels(cleaned, report_type),
+        "summary": [],
+        "columns": [],
+        "rows": [],
+    }
+
+
+def build_report(cleaned):
+    report_type = cleaned.get("report_type") or "attendance"
+    builders = {
+        "attendance": build_attendance_report,
+        "sessions": build_practice_session_report,
+        "gender": build_gender_report,
+        "sports_teams": build_sports_team_report,
+        "trainer": build_trainer_report,
+        "feedback": build_feedback_report,
+    }
+    return builders.get(report_type, build_attendance_report)(cleaned)
+
+
+def build_attendance_report(cleaned):
+    report = report_base("Attendance Report", "attendance", cleaned)
+    records = apply_attendance_filters(
+        AttendanceRecord.objects.select_related("member", "member__profile", "marked_by", "session", "session__team", "session__team__sport"),
+        cleaned,
+    ).order_by("-session__start_at", "member__first_name")
+    total = records.count()
+    present = records.filter(status=AttendanceRecord.Status.PRESENT).count()
+    absent = records.filter(status=AttendanceRecord.Status.ABSENT).count()
+    late = records.filter(status=AttendanceRecord.Status.LATE).count()
+    early = records.filter(status=AttendanceRecord.Status.EARLY_EXIT).count()
+    attended = present + late + early
+    report["summary"] = [
+        {"label": "Attendance %", "value": f"{percent_value(attended, total)}%"},
+        {"label": "Records", "value": total},
+        {"label": "Present", "value": present},
+        {"label": "Absent", "value": absent},
+        {"label": "Late", "value": late},
+        {"label": "Early Exit", "value": early},
+    ]
+    report["columns"] = ["Date", "Session", "Sport", "Team", "Student", "Status", "Trainer", "Marked By", "Marked At"]
+    for record in records[:500]:
+        report["rows"].append([
+            report_cell(record.session.start_at.strftime("%d %b %Y")),
+            report_cell(record.session.title or "Practice session"),
+            report_cell(record.session.team.sport.name),
+            report_cell(f"{record.session.team.get_gender_display()} {record.session.team.name}"),
+            report_cell(record.member.get_full_name() or record.member.username),
+            report_cell(record.get_status_display(), status_badge(record.status)),
+            report_cell(user_label(record.session.team.coordinator) if record.session.team.coordinator else "-"),
+            report_cell(user_label(record.marked_by) if record.marked_by else "-"),
+            report_cell(timezone.localtime(record.marked_at).strftime("%d %b %Y, %I:%M %p") if record.marked_at else "-"),
+        ])
+    return report
+
+
+def build_practice_session_report(cleaned):
+    report = report_base("Practice Session Report", "sessions", cleaned)
+    sessions = apply_session_filters(
+        Session.objects.select_related("team", "team__sport", "team__coordinator").prefetch_related("attendance_records"),
+        cleaned,
+    ).order_by("-start_at")
+    total = sessions.count()
+    completed = sessions.filter(attendance_submitted=True).count()
+    upcoming = sessions.filter(start_at__date__gte=timezone.localdate(), attendance_submitted=False).count()
+    submitted_records = AttendanceRecord.objects.filter(session__in=sessions)
+    present_like = submitted_records.filter(status__in=[AttendanceRecord.Status.PRESENT, AttendanceRecord.Status.LATE, AttendanceRecord.Status.EARLY_EXIT]).count()
+    report["summary"] = [
+        {"label": "Sessions", "value": total},
+        {"label": "Completed", "value": completed},
+        {"label": "Upcoming", "value": upcoming},
+        {"label": "Attendance %", "value": f"{percent_value(present_like, submitted_records.count())}%"},
+    ]
+    report["columns"] = ["Date", "Schedule", "Session", "Sport", "Team", "Trainer", "Venue", "Participants", "Present", "Absent", "Attendance %", "Status"]
+    for session in sessions[:500]:
+        records = list(session.attendance_records.all())
+        present = len([record for record in records if record.status in [AttendanceRecord.Status.PRESENT, AttendanceRecord.Status.LATE, AttendanceRecord.Status.EARLY_EXIT]])
+        absent = len([record for record in records if record.status == AttendanceRecord.Status.ABSENT])
+        participant_count = Membership.objects.filter(team=session.team, is_active=True).count()
+        status = "COMPLETED" if session.attendance_submitted else "UPCOMING" if session.start_at.date() >= timezone.localdate() else "SCHEDULED"
+        report["rows"].append([
+            report_cell(session.start_at.strftime("%d %b %Y")),
+            report_cell(session.get_schedule_slot_display()),
+            report_cell(session.title or "Practice session"),
+            report_cell(session.team.sport.name),
+            report_cell(f"{session.team.get_gender_display()} {session.team.name}"),
+            report_cell(user_label(session.team.coordinator) if session.team.coordinator else "-"),
+            report_cell(session.venue),
+            report_cell(participant_count),
+            report_cell(present),
+            report_cell(absent),
+            report_cell(f"{percent_value(present, len(records))}%"),
+            report_cell(status.title(), status_badge(status)),
+        ])
+    return report
+
+
+def build_gender_report(cleaned):
+    report = report_base("Gender-wise Report", "gender", cleaned)
+    teams = Team.objects.select_related("sport", "coordinator")
+    sessions = apply_session_filters(Session.objects.select_related("team", "team__sport"), cleaned)
+    if cleaned.get("sport"):
+        teams = teams.filter(sport=cleaned["sport"])
+    if cleaned.get("gender"):
+        teams = teams.filter(gender=cleaned["gender"])
+    if cleaned.get("team_type"):
+        teams = teams.filter(team_type=cleaned["team_type"])
+    if cleaned.get("trainer"):
+        teams = teams.filter(coordinator=cleaned["trainer"])
+    report["columns"] = ["Gender", "Sports", "Teams", "Members", "Attendance Records", "Present", "Absent", "Late", "Early Exit", "Attendance %"]
+    total_members = 0
+    total_records = 0
+    total_attended = 0
+    gender_choices = Team.TeamGender.choices
+    if cleaned.get("gender"):
+        gender_choices = [(cleaned["gender"], dict(Team.TeamGender.choices).get(cleaned["gender"], cleaned["gender"]))]
+    for gender_value, gender_label in gender_choices:
+        gender_teams = teams.filter(gender=gender_value)
+        gender_sessions = sessions.filter(team__in=gender_teams)
+        records = AttendanceRecord.objects.filter(session__in=gender_sessions)
+        members = Membership.objects.filter(team__in=gender_teams, is_active=True).values("user").distinct().count()
+        present = records.filter(status=AttendanceRecord.Status.PRESENT).count()
+        absent = records.filter(status=AttendanceRecord.Status.ABSENT).count()
+        late = records.filter(status=AttendanceRecord.Status.LATE).count()
+        early = records.filter(status=AttendanceRecord.Status.EARLY_EXIT).count()
+        attended = present + late + early
+        total_members += members
+        total_records += records.count()
+        total_attended += attended
+        report["rows"].append([
+            report_cell(gender_label),
+            report_cell(gender_teams.values("sport").distinct().count()),
+            report_cell(gender_teams.count()),
+            report_cell(members),
+            report_cell(records.count()),
+            report_cell(present),
+            report_cell(absent),
+            report_cell(late),
+            report_cell(early),
+            report_cell(f"{percent_value(attended, records.count())}%"),
+        ])
+    report["summary"] = [
+        {"label": "Genders", "value": len(Team.TeamGender.choices)},
+        {"label": "Members", "value": total_members},
+        {"label": "Attendance Records", "value": total_records},
+        {"label": "Attendance %", "value": f"{percent_value(total_attended, total_records)}%"},
+    ]
+    return report
+
+
+def build_sports_team_report(cleaned):
+    report = report_base("Sports & Team Report", "sports_teams", cleaned)
+    teams = Team.objects.select_related("sport", "captain", "vice_captain", "coordinator")
+    if cleaned.get("sport"):
+        teams = teams.filter(sport=cleaned["sport"])
+    if cleaned.get("gender"):
+        teams = teams.filter(gender=cleaned["gender"])
+    if cleaned.get("team_type"):
+        teams = teams.filter(team_type=cleaned["team_type"])
+    if cleaned.get("team"):
+        teams = teams.filter(pk=cleaned["team"].pk)
+    if cleaned.get("trainer"):
+        teams = teams.filter(coordinator=cleaned["trainer"])
+    teams = teams.order_by("sport__name", "gender", "team_type", "name")
+    sessions = apply_session_filters(Session.objects.filter(team__in=teams), cleaned)
+    records = AttendanceRecord.objects.filter(session__in=sessions)
+    report["summary"] = [
+        {"label": "Sports", "value": teams.values("sport").distinct().count()},
+        {"label": "Teams", "value": teams.count()},
+        {"label": "Members", "value": Membership.objects.filter(team__in=teams, is_active=True).values("user").distinct().count()},
+        {"label": "Sessions", "value": sessions.count()},
+        {"label": "Attendance %", "value": f"{percent_value(records.exclude(status=AttendanceRecord.Status.ABSENT).count(), records.count())}%"},
+    ]
+    report["columns"] = ["Sport", "Gender", "Team Category", "Team", "Members", "Trainer", "Captain", "Vice Captain", "Sessions", "Completed", "Attendance %", "Status"]
+    for team in teams[:500]:
+        team_sessions = sessions.filter(team=team)
+        team_records = records.filter(session__team=team)
+        report["rows"].append([
+            report_cell(team.sport.name),
+            report_cell(team.get_gender_display()),
+            report_cell(team.get_team_type_display()),
+            report_cell(team.name),
+            report_cell(Membership.objects.filter(team=team, is_active=True).count()),
+            report_cell(user_label(team.coordinator) if team.coordinator else "-"),
+            report_cell(user_label(team.captain) if team.captain else "-"),
+            report_cell(user_label(team.vice_captain) if team.vice_captain else "-"),
+            report_cell(team_sessions.count()),
+            report_cell(team_sessions.filter(attendance_submitted=True).count()),
+            report_cell(f"{percent_value(team_records.exclude(status=AttendanceRecord.Status.ABSENT).count(), team_records.count())}%"),
+            report_cell("Active" if team.is_active else "Inactive", "success" if team.is_active else "secondary"),
+        ])
+    return report
+
+
+def build_trainer_report(cleaned):
+    report = report_base("Trainer Activity Report", "trainer", cleaned)
+    trainers = User.objects.filter(profile__role__in=[UserProfile.Role.TRAINER, UserProfile.Role.COORDINATOR]).distinct()
+    if cleaned.get("trainer"):
+        trainers = trainers.filter(pk=cleaned["trainer"].pk)
+    report["columns"] = ["Trainer", "Assigned Sports", "Assigned Teams", "Sessions", "Completed", "Upcoming", "Students", "Attendance %"]
+    totals = {"teams": 0, "sessions": 0, "completed": 0, "students": 0}
+    for trainer in trainers.order_by("first_name", "last_name", "email"):
+        teams = Team.objects.filter(coordinator=trainer)
+        if cleaned.get("sport"):
+            teams = teams.filter(sport=cleaned["sport"])
+        if cleaned.get("gender"):
+            teams = teams.filter(gender=cleaned["gender"])
+        if cleaned.get("team_type"):
+            teams = teams.filter(team_type=cleaned["team_type"])
+        if cleaned.get("team"):
+            teams = teams.filter(pk=cleaned["team"].pk)
+        sessions = apply_session_filters(Session.objects.filter(team__in=teams), cleaned)
+        records = AttendanceRecord.objects.filter(session__in=sessions)
+        team_count = teams.count()
+        session_count = sessions.count()
+        completed = sessions.filter(attendance_submitted=True).count()
+        students = Membership.objects.filter(team__in=teams, is_active=True).values("user").distinct().count()
+        totals["teams"] += team_count
+        totals["sessions"] += session_count
+        totals["completed"] += completed
+        totals["students"] += students
+        if not team_count and (cleaned.get("sport") or cleaned.get("gender") or cleaned.get("team_type") or cleaned.get("team")):
+            continue
+        report["rows"].append([
+            report_cell(user_label(trainer)),
+            report_cell(", ".join(teams.values_list("sport__name", flat=True).distinct()) or "-"),
+            report_cell(team_count),
+            report_cell(session_count),
+            report_cell(completed),
+            report_cell(sessions.filter(start_at__date__gte=timezone.localdate(), attendance_submitted=False).count()),
+            report_cell(students),
+            report_cell(f"{percent_value(records.exclude(status=AttendanceRecord.Status.ABSENT).count(), records.count())}%"),
+        ])
+    report["summary"] = [
+        {"label": "Trainers", "value": len(report["rows"])},
+        {"label": "Assigned Teams", "value": totals["teams"]},
+        {"label": "Sessions", "value": totals["sessions"]},
+        {"label": "Completed Sessions", "value": totals["completed"]},
+        {"label": "Students", "value": totals["students"]},
+    ]
+    return report
+
+
+def build_feedback_report(cleaned):
+    report = report_base("Feedback Report", "feedback", cleaned)
+    feedback = Feedback.objects.select_related("sender", "receiver", "session", "session__team", "session__team__sport")
+    session_qs = apply_session_filters(Session.objects.all(), cleaned)
+    if cleaned.get("session"):
+        feedback = feedback.filter(session=cleaned["session"])
+    else:
+        feedback = feedback.filter(Q(session__in=session_qs) | Q(session__isnull=True))
+    if cleaned.get("student"):
+        feedback = feedback.filter(Q(sender=cleaned["student"]) | Q(receiver=cleaned["student"]))
+    if cleaned.get("trainer"):
+        feedback = feedback.filter(Q(sender=cleaned["trainer"]) | Q(receiver=cleaned["trainer"]))
+    if cleaned.get("start_date"):
+        feedback = feedback.filter(created_at__date__gte=cleaned["start_date"])
+    if cleaned.get("end_date"):
+        feedback = feedback.filter(created_at__date__lte=cleaned["end_date"])
+    total = feedback.count()
+    report["summary"] = [
+        {"label": "Feedback Items", "value": total},
+        {"label": "Unread", "value": feedback.filter(is_read=False).count()},
+        {"label": "Student to Admin", "value": feedback.filter(feedback_type=Feedback.FeedbackType.STUDENT_TO_ADMIN).count()},
+        {"label": "Admin/Trainer to Student", "value": feedback.exclude(feedback_type=Feedback.FeedbackType.STUDENT_TO_ADMIN).count()},
+    ]
+    report["columns"] = ["Date", "Type", "Session", "Sport", "Team", "Sender", "Receiver", "Status"]
+    for item in feedback.order_by("-created_at")[:500]:
+        team = item.session.team if item.session else None
+        report["rows"].append([
+            report_cell(timezone.localtime(item.created_at).strftime("%d %b %Y, %I:%M %p")),
+            report_cell(item.get_feedback_type_display()),
+            report_cell(item.session.title if item.session else "-"),
+            report_cell(team.sport.name if team else "-"),
+            report_cell(f"{team.get_gender_display()} {team.name}" if team else "-"),
+            report_cell(user_label(item.sender) if item.sender else "-"),
+            report_cell(user_label(item.receiver) if item.receiver else "-"),
+            report_cell("Read" if item.is_read else "Unread", "secondary" if item.is_read else "primary"),
+        ])
+    return report
+
+
+def export_report_excel(report):
     wb = Workbook()
     ws = wb.active
-    ws.title = "Attendance"
-    ws.append(["Date", "Sport", "Team", "Gender", "Student", "Email", "Status", "Marked By", "Marked At"])
-    for record in records:
-        ws.append([
-            record.session.start_at.strftime("%Y-%m-%d"),
-            record.session.team.sport.name,
-            record.session.team.name,
-            record.session.team.get_gender_display(),
-            record.member.get_full_name() or record.member.username,
-            record.member.email,
-            record.get_status_display(),
-            record.marked_by.get_full_name() if record.marked_by else "",
-            record.marked_at.strftime("%Y-%m-%d %H:%M"),
-        ])
+    ws.title = "Report"
+    title_fill = PatternFill("solid", fgColor="003366")
+    header_fill = PatternFill("solid", fgColor="0056B3")
+    section_fill = PatternFill("solid", fgColor="E7EBF1")
+    white_font = Font(color="FFFFFF", bold=True)
+    bold_font = Font(bold=True)
+    ws.append([report["university"]])
+    ws.append([report["system"]])
+    ws.append([report["title"]])
+    ws.append(["Generated", timezone.localtime(report["generated_at"]).strftime("%d %b %Y, %I:%M %p")])
+    ws.append([])
+    ws.append(["Selected Filters"])
+    if report["filters"]:
+        for item in report["filters"]:
+            ws.append([item["label"], str(item["value"])])
+    else:
+        ws.append(["All", "No filters selected"])
+    ws.append([])
+    ws.append(["Summary"])
+    for item in report["summary"]:
+        ws.append([item["label"], item["value"]])
+    ws.append([])
+    detail_header_row = ws.max_row + 1
+    ws.append(report["columns"])
+    for row in report["rows"]:
+        ws.append([cell["value"] for cell in row])
+    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=max(len(report["columns"]), 2))
+    ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=max(len(report["columns"]), 2))
+    ws.merge_cells(start_row=3, start_column=1, end_row=3, end_column=max(len(report["columns"]), 2))
+    for row_number in [1, 2, 3]:
+        cell = ws.cell(row=row_number, column=1)
+        cell.font = white_font if row_number == 1 else bold_font
+        cell.fill = title_fill if row_number == 1 else section_fill
+        cell.alignment = Alignment(horizontal="center")
+    for row in ws.iter_rows(min_row=6, max_row=ws.max_row):
+        if row[0].value in {"Selected Filters", "Summary"}:
+            row[0].font = bold_font
+            row[0].fill = section_fill
+    for cell in ws[detail_header_row]:
+        cell.fill = header_fill
+        cell.font = white_font
+        cell.alignment = Alignment(horizontal="center")
+    for column_cells in ws.columns:
+        width = min(max(len(str(cell.value or "")) for cell in column_cells) + 2, 34)
+        ws.column_dimensions[get_column_letter(column_cells[0].column)].width = width
+    ws.freeze_panes = ws.cell(row=detail_header_row + 1, column=1)
     output = BytesIO()
     wb.save(output)
     response = HttpResponse(output.getvalue(), content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-    response["Content-Disposition"] = 'attachment; filename="attendance-report.xlsx"'
+    response["Content-Disposition"] = f'attachment; filename="{report["type"]}-report.xlsx"'
     return response
 
 
-def export_pdf(records):
+def export_report_pdf(report):
     buffer = BytesIO()
     pdf = canvas.Canvas(buffer, pagesize=A4)
     width, height = A4
-    y = height - 40
-    pdf.setFont("Helvetica-Bold", 14)
-    pdf.drawString(40, y, "Sports Attendance Report")
-    y -= 30
+    left = 34
+    right = width - 34
+    page = 1
+
+    def draw_footer():
+        pdf.setFont("Helvetica", 7)
+        pdf.drawString(left, 22, "Sports Attendance System")
+        pdf.drawRightString(right, 22, f"Page {page}")
+
+    def draw_header():
+        y_pos = height - 36
+        logo_path = settings.BASE_DIR / "static" / "img" / "christ-logo.jpeg"
+        if logo_path.exists():
+            pdf.drawImage(str(logo_path), left, y_pos - 58, width=102, height=50, preserveAspectRatio=True, mask="auto")
+        else:
+            pdf.setStrokeColorRGB(0, .2, .4)
+            pdf.setFillColorRGB(.93, .96, 1)
+            pdf.roundRect(left, y_pos - 58, 62, 54, 8, stroke=1, fill=1)
+            pdf.setFillColorRGB(0, .2, .4)
+            pdf.setFont("Helvetica-Bold", 14)
+            pdf.drawCentredString(left + 31, y_pos - 36, "CU")
+        pdf.setFont("Helvetica-Bold", 12)
+        pdf.drawString(left + 116, y_pos - 14, report["university"])
+        pdf.setFont("Helvetica-Bold", 10)
+        pdf.drawString(left + 116, y_pos - 30, report["system"])
+        pdf.setFont("Helvetica-Bold", 11)
+        pdf.drawString(left + 116, y_pos - 48, report["title"])
+        return y_pos - 78
+
+    def new_page():
+        nonlocal page
+        draw_footer()
+        pdf.showPage()
+        page += 1
+        return draw_header()
+
+    y = draw_header()
     pdf.setFont("Helvetica", 8)
-    for record in records[:500]:
-        line = f"{record.session.start_at:%Y-%m-%d} | {record.session.team.sport.name} | {record.session.team.get_gender_display()} {record.session.team.name} | {record.member.get_full_name() or record.member.username} | {record.get_status_display()}"
-        pdf.drawString(40, y, line[:120])
-        y -= 14
-        if y < 40:
-            pdf.showPage()
-            pdf.setFont("Helvetica", 8)
-            y = height - 40
+    pdf.drawString(left, y, f"Generated: {timezone.localtime(report['generated_at']):%d %b %Y, %I:%M %p}")
+    y -= 14
+    filter_text = ", ".join([f"{item['label']}: {item['value']}" for item in report["filters"]]) or "Filters: All"
+    pdf.drawString(left, y, filter_text[:140])
+    y -= 20
+    card_width = (right - left - 18) / 4
+    for index, item in enumerate(report["summary"][:8]):
+        if index and index % 4 == 0:
+            y -= 46
+        x = left + (index % 4) * (card_width + 6)
+        pdf.setFillColorRGB(.93, .96, 1)
+        pdf.roundRect(x, y - 32, card_width, 28, 5, stroke=0, fill=1)
+        pdf.setFillColorRGB(0, 0, 0)
+        pdf.setFont("Helvetica", 6.5)
+        pdf.drawString(x + 6, y - 13, str(item["label"])[:24])
+        pdf.setFont("Helvetica-Bold", 9)
+        pdf.drawString(x + 6, y - 26, str(item["value"])[:18])
+    y -= 56 if len(report["summary"]) <= 4 else 102
+    col_count = max(len(report["columns"]), 1)
+    col_width = (right - left) / col_count
+    pdf.setFillColorRGB(0, .2, .4)
+    pdf.rect(left, y - 12, right - left, 14, stroke=0, fill=1)
+    pdf.setFillColorRGB(1, 1, 1)
+    pdf.setFont("Helvetica-Bold", 5.7 if col_count > 9 else 6.5)
+    for index, column in enumerate(report["columns"]):
+        pdf.drawString(left + (index * col_width) + 2, y - 8, str(column)[:18])
+    y -= 18
+    pdf.setFillColorRGB(0, 0, 0)
+    pdf.setFont("Helvetica", 5.7 if col_count > 9 else 6.4)
+    for row in report["rows"][:500]:
+        if y < 42:
+            y = new_page()
+            pdf.setFillColorRGB(0, .2, .4)
+            pdf.rect(left, y - 12, right - left, 14, stroke=0, fill=1)
+            pdf.setFillColorRGB(1, 1, 1)
+            pdf.setFont("Helvetica-Bold", 5.7 if col_count > 9 else 6.5)
+            for index, column in enumerate(report["columns"]):
+                pdf.drawString(left + (index * col_width) + 2, y - 8, str(column)[:18])
+            y -= 18
+            pdf.setFillColorRGB(0, 0, 0)
+            pdf.setFont("Helvetica", 5.7 if col_count > 9 else 6.4)
+        for index, cell in enumerate(row):
+            pdf.drawString(left + (index * col_width) + 2, y, str(cell["value"])[:18])
+        y -= 12
+    draw_footer()
     pdf.save()
     response = HttpResponse(buffer.getvalue(), content_type="application/pdf")
-    response["Content-Disposition"] = 'attachment; filename="attendance-report.pdf"'
+    response["Content-Disposition"] = f'attachment; filename="{report["type"]}-report.pdf"'
     return response

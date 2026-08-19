@@ -1,4 +1,3 @@
-from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.shortcuts import redirect
@@ -6,16 +5,12 @@ from django.shortcuts import redirect
 from allauth.core.exceptions import ImmediateHttpResponse
 from allauth.socialaccount.adapter import DefaultSocialAccountAdapter
 
+from .email_validation import INVALID_CHRIST_EMAIL_MESSAGE, is_allowed_christ_email
 from .models import LoginAccessRequest, UserProfile
 
 
 def is_allowed_google_email(email, allowed_domains):
-    email_domain = email.rsplit("@", 1)[-1].strip().lower() if "@" in email else ""
-    for domain in allowed_domains:
-        domain = domain.strip().lower()
-        if email_domain == domain or email_domain.endswith(f".{domain}"):
-            return True
-    return False
+    return is_allowed_christ_email(email)
 
 
 class ChristGoogleAccountAdapter(DefaultSocialAccountAdapter):
@@ -25,9 +20,8 @@ class ChristGoogleAccountAdapter(DefaultSocialAccountAdapter):
         return email, full_name
 
     def _validate_university_email(self, request, email):
-        allowed_domains = [domain.lower() for domain in settings.ALLOWED_GOOGLE_EMAIL_DOMAINS]
-        if allowed_domains and not is_allowed_google_email(email, allowed_domains):
-            messages.error(request, "Please sign in with your Christ University Google account.")
+        if not is_allowed_christ_email(email):
+            messages.error(request, INVALID_CHRIST_EMAIL_MESSAGE)
             raise ImmediateHttpResponse(redirect("login"))
 
     def pre_social_login(self, request, sociallogin):

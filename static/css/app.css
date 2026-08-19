@@ -856,6 +856,136 @@ img.avatar {
   display: none;
 }
 
+.report-result-panel {
+  margin-left: auto;
+  margin-right: auto;
+  max-width: 1180px;
+}
+
+.report-sheet {
+  background: #ffffff;
+  border: 1px solid rgba(0, 51, 102, .12);
+  border-radius: .95rem;
+  box-shadow: 0 .8rem 2rem rgba(0, 51, 102, .08);
+  padding: 1rem;
+}
+
+.report-header {
+  align-items: center;
+  border-bottom: 1px solid rgba(104, 114, 128, .18);
+  display: flex;
+  gap: 1rem;
+  padding-bottom: 1rem;
+}
+
+.report-logo-placeholder,
+.report-logo-wrap {
+  align-items: center;
+  background: rgba(127, 179, 213, .22);
+  border: 1px dashed rgba(0, 51, 102, .28);
+  border-radius: .85rem;
+  color: var(--primary);
+  display: flex;
+  flex: 0 0 150px;
+  font-size: .72rem;
+  font-weight: 800;
+  height: 62px;
+  justify-content: center;
+  overflow: hidden;
+  text-transform: uppercase;
+}
+
+.report-logo-wrap {
+  background: #ffffff;
+  border-style: solid;
+  padding: .25rem;
+}
+
+.report-logo-wrap img {
+  height: 100%;
+  object-fit: contain;
+  width: 100%;
+}
+
+.report-university,
+.report-system {
+  color: var(--neutral);
+  font-size: .86rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+.report-system {
+  color: var(--secondary);
+  text-transform: uppercase;
+}
+
+.report-header h2 {
+  color: var(--primary);
+  font-size: 1.25rem;
+  margin: .2rem 0 0;
+}
+
+.report-meta-grid {
+  display: grid;
+  gap: .65rem;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  margin-top: 1rem;
+}
+
+.report-filter-chip,
+.report-summary-card {
+  background: rgba(231, 235, 241, .64);
+  border: 1px solid rgba(104, 114, 128, .14);
+  border-radius: .75rem;
+  padding: .7rem .75rem;
+}
+
+.report-filter-chip span,
+.report-summary-card span {
+  color: var(--neutral);
+  display: block;
+  font-size: .72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.report-filter-chip strong,
+.report-summary-card strong {
+  color: var(--ink);
+  display: block;
+  font-size: .86rem;
+  margin-top: .15rem;
+}
+
+.report-summary-grid {
+  display: grid;
+  gap: .7rem;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  margin-top: 1rem;
+}
+
+.report-summary-card {
+  background: rgba(127, 179, 213, .16);
+}
+
+.report-summary-card:nth-child(2n) {
+  background: rgba(0, 86, 179, .1);
+}
+
+.report-summary-card:nth-child(3n) {
+  background: rgba(7, 92, 49, .09);
+}
+
+.report-summary-card strong {
+  color: var(--primary);
+  font-size: 1.15rem;
+}
+
+.report-table {
+  min-width: 980px;
+}
+
 .mobile-data-card {
   background: #ffffff;
   border: 1px solid rgba(0, 51, 102, .12);
@@ -1475,6 +1605,10 @@ body.modal-open {
     flex-direction: column;
   }
 
+  .report-meta-grid {
+    grid-template-columns: 1fr;
+  }
+
   .metric-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -1567,6 +1701,21 @@ body.modal-open {
     padding: .85rem;
   }
 
+  .report-summary-grid,
+  .report-meta-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .report-header {
+    align-items: flex-start;
+  }
+
+  .report-logo-placeholder,
+  .report-logo-wrap {
+    flex-basis: 112px;
+    height: 48px;
+  }
+
   .dashboard-welcome {
     font-size: 2rem;
   }
@@ -1618,7 +1767,10 @@ body.modal-open {
 
   .attendance-print-area,
   .attendance-print-area .panel,
-  .attendance-print-area .table-responsive {
+  .attendance-print-area .table-responsive,
+  .report-result-panel,
+  .report-sheet,
+  .report-sheet .table-responsive {
     background: #ffffff !important;
     border: 0 !important;
     box-shadow: none !important;
@@ -1643,25 +1795,39 @@ body.modal-open {
     border: 1px solid #999999;
   }
 
-  .attendance-print-area table.data-table {
+  .attendance-print-area table.data-table,
+  .report-sheet table.data-table {
     display: table !important;
+    min-width: 0 !important;
     width: 100% !important;
   }
 
   .attendance-print-area .data-table th,
-  .attendance-print-area .data-table td {
+  .attendance-print-area .data-table td,
+  .report-sheet .data-table th,
+  .report-sheet .data-table td {
     border: 1px solid #777777 !important;
     color: #000000 !important;
     padding: 6px 8px !important;
   }
 
-  .attendance-print-area .data-table thead th {
+  .attendance-print-area .data-table thead th,
+  .report-sheet .data-table thead th {
     background: #eeeeee !important;
     color: #000000 !important;
   }
 
-  .attendance-print-area .badge {
+  .attendance-print-area .badge,
+  .report-sheet .badge {
     border: 1px solid #777777 !important;
     color: #000000 !important;
+  }
+
+  .report-logo-placeholder,
+  .report-logo-wrap,
+  .report-filter-chip,
+  .report-summary-card {
+    background: #ffffff !important;
+    border: 1px solid #999999 !important;
   }
 }

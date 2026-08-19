@@ -1,31 +1,280 @@
 {% extends "base.html" %}
+{% load static %}
 {% block content %}
 <div class="page-head">
-  <div><p class="eyebrow">Admin</p><h1>Reports</h1></div>
-  <div class="d-flex gap-2">
-    <a class="btn btn-outline-primary" href="{% url 'reports_export' 'excel' %}?{{ request.GET.urlencode }}">Excel</a>
-    <a class="btn btn-outline-primary" href="{% url 'reports_export' 'pdf' %}?{{ request.GET.urlencode }}">PDF</a>
+  <div>
+    <p class="eyebrow">Admin</p>
+    <h1>Reports</h1>
+    <p class="text-muted mb-0">Generate attendance, session, gender, sports, trainer, and feedback reports.</p>
+  </div>
+  <div class="d-flex flex-wrap gap-2">
+    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#reportModal"><i class="bi bi-bar-chart"></i> Generate Report</button>
+    <a class="btn btn-outline-primary" href="{% url 'reports_export' 'excel' %}?{{ request.GET.urlencode }}"><i class="bi bi-file-earmark-spreadsheet"></i> Excel</a>
+    <a class="btn btn-outline-primary" href="{% url 'reports_export' 'pdf' %}?{{ request.GET.urlencode }}"><i class="bi bi-file-earmark-pdf"></i> PDF</a>
+    <button class="btn btn-outline-primary" type="button" onclick="window.print()"><i class="bi bi-printer"></i> Print</button>
   </div>
 </div>
-<section class="panel mb-4">
-  <form class="row g-3" method="get">
-    <div class="col-md-2">{{ form.sport.label_tag }}{{ form.sport }}</div>
-    <div class="col-md-2">{{ form.gender.label_tag }}{{ form.gender }}</div>
-    <div class="col-md-2">{{ form.team_type.label_tag }}{{ form.team_type }}</div>
-    <div class="col-md-2">{{ form.team.label_tag }}{{ form.team }}</div>
-    <div class="col-md-2">{{ form.student.label_tag }}{{ form.student }}</div>
-    <div class="col-md-2">{{ form.start_date.label_tag }}{{ form.start_date }}</div>
-    <div class="col-md-2">{{ form.end_date.label_tag }}{{ form.end_date }}</div>
-    <div class="col-md-2 d-flex align-items-end"><button class="btn btn-primary w-100">Go</button></div>
-  </form>
+
+<section class="panel report-result-panel">
+  <div class="section-title no-print">
+    <h2>Generated Report</h2>
+    <span class="small text-muted">{{ report.rows|length }} rows shown</span>
+  </div>
+  <div class="report-sheet">
+  <div class="report-header">
+    <div class="report-logo-wrap"><img src="{% static 'img/christ-logo.jpeg' %}" alt="Christ University logo"></div>
+    <div>
+      <p class="report-university">{{ report.university }}</p>
+      <p class="report-system">{{ report.system }}</p>
+      <h2>{{ report.title }}</h2>
+    </div>
+  </div>
+
+  <div class="report-meta-grid">
+    <div class="report-filter-chip">
+      <span>Generated</span>
+      <strong>{{ report.generated_at|date:"d M Y, h:i A" }}</strong>
+    </div>
+    {% if report.filters %}
+      {% for filter in report.filters %}
+        <div class="report-filter-chip">
+          <span>{{ filter.label }}</span>
+          <strong>{{ filter.value }}</strong>
+        </div>
+      {% endfor %}
+    {% else %}
+      <div class="report-filter-chip">
+        <span>Selected Filters</span>
+        <strong>All available data</strong>
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="report-summary-grid">
+    {% for item in report.summary %}
+      <article class="report-summary-card">
+        <span>{{ item.label }}</span>
+        <strong>{{ item.value }}</strong>
+      </article>
+    {% endfor %}
+  </div>
+
+  <div class="section-title mt-4">
+    <h2>{{ report.title }} Details</h2>
+    <span class="small text-muted">{{ report.rows|length }} rows shown</span>
+  </div>
+  <div class="table-responsive">
+    <table class="table align-middle data-table report-table">
+      <thead>
+        <tr>
+          {% for column in report.columns %}
+            <th>{{ column }}</th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in report.rows %}
+          <tr>
+            {% for cell in row %}
+              <td>
+                {% if cell.badge %}
+                  <span class="badge text-bg-{{ cell.badge }}">{{ cell.value }}</span>
+                {% else %}
+                  {{ cell.value }}
+                {% endif %}
+              </td>
+            {% endfor %}
+          </tr>
+        {% empty %}
+          <tr><td colspan="{{ report.columns|length }}" class="empty-state">No report data found for the selected filters.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  </div>
 </section>
-<section class="panel">
-  <div class="section-title"><h2>Attendance Report List</h2></div>
-  <div class="table-responsive"><table class="table align-middle data-table">
-    <thead><tr><th>Date</th><th>Sport</th><th>Team</th><th>Student</th><th>Status</th><th>Marked By</th></tr></thead>
-    <tbody>{% for record in records %}
-      <tr><td>{{ record.session.start_at|date:"d M Y" }}</td><td>{{ record.session.team.sport.name }}</td><td>{{ record.session.team.get_gender_display }} {{ record.session.team.name }}</td><td>{{ record.member.get_full_name|default:record.member.username }}</td><td>{% include "partials/attendance_badge.html" with status=record.status label=record.get_status_display %}</td><td>{{ record.marked_by|default:"-" }}</td></tr>
-    {% empty %}<tr><td colspan="6" class="text-muted">No report data found.</td></tr>{% endfor %}</tbody>
-  </table></div>
-</section>
+
+<div class="modal fade" id="reportModal" tabindex="-1">
+  <div class="modal-dialog modal-xl modal-dialog-centered">
+    <form class="modal-content" method="get" id="reportFilterForm">
+      <div class="modal-header">
+        <h5 class="modal-title">Generate Report</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-3">
+          <div class="col-md-4">
+            <label class="form-label" for="{{ form.report_type.id_for_label }}">Report Type</label>
+            {{ form.report_type }}
+          </div>
+          <div class="col-md-4" data-report-filter="attendance,sessions,gender,sports_teams,trainer,feedback">{{ form.sport.label_tag }}{{ form.sport }}</div>
+          <div class="col-md-4" data-report-filter="attendance,sessions,gender,sports_teams,trainer,feedback">{{ form.gender.label_tag }}{{ form.gender }}</div>
+          <div class="col-md-4" data-report-filter="attendance,sessions,gender,sports_teams,trainer,feedback">{{ form.team_type.label_tag }}{{ form.team_type }}</div>
+          <div class="col-md-4" data-report-filter="attendance,sessions,sports_teams,trainer,feedback">{{ form.team.label_tag }}{{ form.team }}</div>
+          <div class="col-md-4" data-report-filter="attendance,feedback">{{ form.session.label_tag }}{{ form.session }}</div>
+          <div class="col-md-4" data-report-filter="attendance,sessions,gender,sports_teams,trainer,feedback">{{ form.trainer.label_tag }}{{ form.trainer }}</div>
+          <div class="col-md-4" data-report-filter="attendance,feedback">{{ form.student.label_tag }}{{ form.student }}</div>
+          <div class="col-md-4" data-report-filter="attendance">{{ form.attendance_status.label_tag }}{{ form.attendance_status }}</div>
+          <div class="col-md-4" data-report-filter="sessions">{{ form.venue.label_tag }}{{ form.venue }}</div>
+          <div class="col-md-4" data-report-filter="sessions">{{ form.session_status.label_tag }}{{ form.session_status }}</div>
+          <div class="col-md-4" data-report-filter="attendance,sessions,gender,sports_teams,trainer,feedback">{{ form.start_date.label_tag }}{{ form.start_date }}</div>
+          <div class="col-md-4" data-report-filter="attendance,sessions,gender,sports_teams,trainer,feedback">{{ form.end_date.label_tag }}{{ form.end_date }}</div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <a class="btn btn-outline-secondary" href="{% url 'reports' %}">Reset</a>
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-primary" type="submit"><i class="bi bi-bar-chart"></i> Generate Report</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{{ report_filter_data|json_script:"report-filter-data" }}
+{% endblock %}
+
+{% block scripts %}
+<script>
+  (() => {
+    const reportType = document.getElementById('{{ form.report_type.id_for_label }}');
+    const filterBlocks = document.querySelectorAll('[data-report-filter]');
+    const data = JSON.parse(document.getElementById('report-filter-data').textContent);
+    const fields = {
+      sport: document.getElementById('{{ form.sport.id_for_label }}'),
+      gender: document.getElementById('{{ form.gender.id_for_label }}'),
+      teamType: document.getElementById('{{ form.team_type.id_for_label }}'),
+      team: document.getElementById('{{ form.team.id_for_label }}'),
+      session: document.getElementById('{{ form.session.id_for_label }}'),
+      trainer: document.getElementById('{{ form.trainer.id_for_label }}'),
+      student: document.getElementById('{{ form.student.id_for_label }}'),
+      venue: document.getElementById('{{ form.venue.id_for_label }}'),
+    };
+    const initialValues = {
+      gender: fields.gender.value,
+      teamType: fields.teamType.value,
+      team: fields.team.value,
+      session: fields.session.value,
+      trainer: fields.trainer.value,
+      student: fields.student.value,
+      venue: fields.venue.value,
+    };
+    const originalChoices = {
+      gender: Array.from(fields.gender.options).filter((item) => item.value).map((item) => ({ id: item.value, label: item.textContent })),
+      teamType: Array.from(fields.teamType.options).filter((item) => item.value).map((item) => ({ id: item.value, label: item.textContent })),
+    };
+    const option = (value, label) => {
+      const node = document.createElement('option');
+      node.value = value;
+      node.textContent = label;
+      return node;
+    };
+    const resetSelect = (select, placeholder, items, selectedValue, valueKey = 'id') => {
+      const currentValue = selectedValue ?? select.value;
+      select.innerHTML = '';
+      select.appendChild(option('', placeholder));
+      items.forEach((item) => {
+        const node = option(item[valueKey], item.label);
+        if (String(item[valueKey]) === String(currentValue)) node.selected = true;
+        select.appendChild(node);
+      });
+      if (currentValue && !Array.from(select.options).some((item) => item.value === String(currentValue))) {
+        select.value = '';
+      }
+    };
+    const selected = () => ({
+      sport: fields.sport.value,
+      gender: fields.gender.value,
+      teamType: fields.teamType.value,
+      team: fields.team.value,
+    });
+    const matchesParent = (item, state) => {
+      if (state.sport && String(item.sport) !== String(state.sport)) return false;
+      if (state.gender && item.gender !== state.gender) return false;
+      if (state.teamType && item.team_type !== state.teamType) return false;
+      return true;
+    };
+    const matchesPerson = (item, state) => {
+      if (state.team && !item.teams.map(String).includes(String(state.team))) return false;
+      if (state.sport && !item.sports.map(String).includes(String(state.sport))) return false;
+      if (state.gender && !item.genders.includes(state.gender)) return false;
+      if (state.teamType && !item.team_types.includes(state.teamType)) return false;
+      return true;
+    };
+    const refreshDependentOptions = (preserveInitial = false) => {
+      let state = selected();
+      const genderChoices = originalChoices.gender.filter((choice) => {
+        return data.teams.some((team) => {
+          if (state.sport && String(team.sport) !== String(state.sport)) return false;
+          return team.gender === choice.id;
+        });
+      });
+      resetSelect(fields.gender, 'Select Gender', genderChoices, preserveInitial ? initialValues.gender : fields.gender.value);
+      state = selected();
+      const teamTypeChoices = originalChoices.teamType.filter((choice) => {
+        return data.teams.some((team) => {
+          if (state.sport && String(team.sport) !== String(state.sport)) return false;
+          if (state.gender && team.gender !== state.gender) return false;
+          return team.team_type === choice.id;
+        });
+      });
+      resetSelect(fields.teamType, 'Select Team Type', teamTypeChoices, preserveInitial ? initialValues.teamType : fields.teamType.value);
+      state = selected();
+      const teams = data.teams.filter((item) => matchesParent(item, state));
+      resetSelect(fields.team, 'Select Team', teams, preserveInitial ? initialValues.team : fields.team.value);
+      const refreshedState = selected();
+      const sessions = data.sessions.filter((item) => matchesParent(item, refreshedState) && (!refreshedState.team || String(item.team) === String(refreshedState.team)));
+      const students = data.students.filter((item) => matchesPerson(item, refreshedState));
+      const trainers = data.trainers.filter((item) => matchesPerson(item, refreshedState) || (!refreshedState.sport && !refreshedState.gender && !refreshedState.teamType && !refreshedState.team));
+      const venues = data.venues;
+      resetSelect(fields.session, 'Select Practice Session', sessions, preserveInitial ? initialValues.session : fields.session.value);
+      resetSelect(fields.student, 'Select Student', students, preserveInitial ? initialValues.student : fields.student.value);
+      resetSelect(fields.trainer, 'Select Trainer', trainers, preserveInitial ? initialValues.trainer : fields.trainer.value);
+      resetSelect(fields.venue, 'Select Venue', venues, preserveInitial ? initialValues.venue : fields.venue.value, 'value');
+    };
+    const updateFilters = () => {
+      const selected = reportType.value || 'attendance';
+      filterBlocks.forEach((block) => {
+        const allowed = block.dataset.reportFilter.split(',');
+        const isVisible = allowed.includes(selected);
+        block.classList.toggle('d-none', !isVisible);
+        block.querySelectorAll('select, input').forEach((field) => {
+          field.disabled = !isVisible;
+        });
+      });
+    };
+    fields.sport.addEventListener('change', () => {
+      fields.gender.value = '';
+      fields.teamType.value = '';
+      fields.team.value = '';
+      fields.session.value = '';
+      fields.student.value = '';
+      fields.trainer.value = '';
+      refreshDependentOptions();
+    });
+    fields.gender.addEventListener('change', () => {
+      fields.teamType.value = '';
+      fields.team.value = '';
+      fields.session.value = '';
+      fields.student.value = '';
+      fields.trainer.value = '';
+      refreshDependentOptions();
+    });
+    fields.teamType.addEventListener('change', () => {
+      fields.team.value = '';
+      fields.session.value = '';
+      fields.student.value = '';
+      fields.trainer.value = '';
+      refreshDependentOptions();
+    });
+    fields.team.addEventListener('change', () => {
+      fields.session.value = '';
+      fields.student.value = '';
+      fields.trainer.value = '';
+      refreshDependentOptions();
+    });
+    reportType.addEventListener('change', updateFilters);
+    refreshDependentOptions(true);
+    updateFilters();
+  })();
+</script>
 {% endblock %}

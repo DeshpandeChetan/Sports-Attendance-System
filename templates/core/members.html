@@ -44,7 +44,7 @@
   <div class="section-title"><h2>Student List</h2><span class="small text-muted">Registered and assigned students</span></div>
   <div class="table-responsive">
     <table class="table align-middle data-table">
-      <thead><tr><th>Student</th><th>Email</th><th data-filter="false">Mobile</th><th>Reg No</th><th>Department</th><th>Class</th><th>Team</th><th>Status</th><th class="text-end">Actions</th></tr></thead>
+      <thead><tr><th data-filter="false">Student</th><th data-filter="false">Email</th><th data-filter="false">Mobile</th><th data-filter="false">Reg No</th><th>Department</th><th>Class</th><th>Team</th><th>Status</th><th class="text-end">Actions</th></tr></thead>
       <tbody>
         {% for row in student_rows %}
           <tr>
@@ -90,9 +90,9 @@
       <div class="modal-body">
         <div class="row g-3">
           <div class="col-md-6"><label class="form-label">Student Name</label><input class="form-control" name="student_name" data-field="name" required></div>
-          <div class="col-md-6"><label class="form-label">Student Email</label><input class="form-control" type="email" name="student_email" data-field="email" required></div>
+          <div class="col-md-6"><label class="form-label">Student Email</label><input class="form-control" type="email" name="student_email" data-field="email" pattern="^[^@\s]+@([A-Za-z0-9-]+\.)*christuniversity\.in$" title="Use a Christ University email ending with christuniversity.in" required></div>
           <div class="col-md-6"><label class="form-label">Mobile Number</label><input class="form-control" name="mobile_number" data-field="mobile" inputmode="numeric" pattern="[0-9]{10}" maxlength="10" placeholder="10 digit mobile number"></div>
-          <div class="col-md-6"><label class="form-label">Reg No</label><input class="form-control" name="register_no" data-field="register-no"></div>
+          <div class="col-md-6"><label class="form-label">Reg No</label><input class="form-control" name="register_no" data-field="register-no" data-unique-register-no><div class="invalid-feedback">This registration number already exists</div></div>
           <div class="col-md-6"><label class="form-label">Department</label><input class="form-control" name="department" data-field="department"></div>
           <div class="col-md-6"><label class="form-label">Class</label><input class="form-control" name="class_name" data-field="class-name"></div>
           <div class="col-md-6"><label class="form-label">Gender</label><select class="form-select" name="gender" data-field="gender"><option value="">Select Gender</option><option value="Male">Male</option><option value="Female">Female</option></select></div>
@@ -191,10 +191,26 @@
 {% if can_manage_students and teams %}
   {% include "partials/bulk_upload_modal.html" with bulk_kind="students" bulk_title="Students" %}
 {% endif %}
+{{ registration_numbers|json_script:"registration-number-data" }}
 {% endblock %}
 
 {% block scripts %}
 <script>
+  const registrationNumbers = JSON.parse(document.getElementById('registration-number-data')?.textContent || '[]');
+
+  function validateRegistrationNumber(form) {
+    const input = form.querySelector('[data-unique-register-no]');
+    const userId = form.querySelector('[data-field="user-id"]')?.value || '';
+    const value = (input?.value || '').trim().toLowerCase();
+    if (!input) return true;
+    const duplicate = value && registrationNumbers.some(item => {
+      return String(item.register_no || '').trim().toLowerCase() === value && String(item.user_id || '') !== String(userId || '');
+    });
+    input.setCustomValidity(duplicate ? 'This registration number already exists' : '');
+    input.classList.toggle('is-invalid', Boolean(duplicate));
+    return !duplicate;
+  }
+
   let pendingTeamRemovalCheckbox = null;
 
   function checkedValues(modal, field) {
@@ -280,6 +296,16 @@
       b?.dataset.assignedTeams || (b?.dataset.team ? b.dataset.team : '')
     );
     filterStudentTeams(modal);
+    validateRegistrationNumber(modal.querySelector('form'));
+  });
+  document.getElementById('memberModal')?.querySelector('[data-unique-register-no]')?.addEventListener('input', event => {
+    validateRegistrationNumber(event.target.closest('form'));
+  });
+  document.getElementById('memberModal')?.querySelector('form')?.addEventListener('submit', event => {
+    if (!validateRegistrationNumber(event.currentTarget)) {
+      event.preventDefault();
+      event.currentTarget.reportValidity();
+    }
   });
   document.getElementById('memberModal')?.querySelectorAll('[data-field="sport-check"], [data-field="team-type-check"]').forEach(input => {
     input.addEventListener('change', event => {
