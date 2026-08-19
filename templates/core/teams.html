@@ -15,11 +15,11 @@
   <div class="section-title"><h2>Team List</h2><span class="small text-muted">All sports teams</span></div>
   <div class="table-responsive">
     <table class="table align-middle data-table">
-      <thead><tr><th>Team</th><th>Type</th><th>Gender</th><th>Captain</th><th>Vice Captain</th><th>Trainer</th><th>Status</th><th class="text-end">Actions</th></tr></thead>
+      <thead><tr><th data-filter-label="Sports">Team</th><th>Type</th><th>Gender</th><th>Captain</th><th>Vice Captain</th><th>Trainer</th><th>Status</th><th class="text-end">Actions</th></tr></thead>
       <tbody>
         {% for team in teams %}
           <tr>
-            <td><strong>{{ team.sport.name }}</strong><div class="text-muted small">{{ team.name }}</div></td>
+            <td data-filter-value="{{ team.sport.name }}"><strong>{{ team.sport.name }}</strong><div class="text-muted small">{{ team.name }}</div></td>
             <td>{{ team.get_team_type_display }}</td>
             <td>
               {% if team.gender == 'MALE' %}
@@ -28,20 +28,24 @@
                 <span class="badge gender-badge gender-female"><i class="bi bi-gender-female"></i> Female</span>
               {% endif %}
             </td>
-            <td>{{ team.captain|default:"-" }}</td>
-            <td>{{ team.vice_captain|default:"-" }}</td>
-            <td>{{ team.coordinator|default:"-" }}</td>
+            <td>{% if team.captain %}{{ team.captain.get_full_name|default:"Name not set" }}{% else %}-{% endif %}</td>
+            <td>{% if team.vice_captain %}{{ team.vice_captain.get_full_name|default:"Name not set" }}{% else %}-{% endif %}</td>
+            <td>{% if team.coordinator %}{{ team.coordinator.get_full_name|default:"Name not set" }}{% else %}-{% endif %}</td>
             <td>{% if team.is_active %}<span class="badge text-bg-success">Active</span>{% else %}<span class="badge text-bg-secondary">Inactive</span>{% endif %}</td>
             <td class="text-end">
-              {% if user.is_superuser or user.profile.role == 'SUPER_ADMIN' or user.profile.role == 'SUB_ADMIN' %}
+              {% if team.can_view_players %}
                 <div class="dropdown">
                   <button class="btn btn-sm btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown">Actions</button>
                   <ul class="dropdown-menu dropdown-menu-end">
-                    <li><button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#teamViewModal" data-sport="{{ team.sport.name }}" data-name="{{ team.name }}" data-type="{{ team.get_team_type_display }}" data-gender="{{ team.get_gender_display }}" data-captain="{{ team.captain|default:'-' }}" data-vice-captain="{{ team.vice_captain|default:'-' }}" data-trainer="{{ team.coordinator|default:'-' }}" data-status="{{ team.is_active|yesno:'Active,Inactive' }}"><i class="bi bi-eye"></i> View</button></li>
+                    {% if user.is_superuser or user.profile.role == 'SUPER_ADMIN' or user.profile.role == 'SUB_ADMIN' %}
+                      <li><button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#teamViewModal" data-sport="{{ team.sport.name }}" data-name="{{ team.name }}" data-type="{{ team.get_team_type_display }}" data-gender="{{ team.get_gender_display }}" data-captain="{% if team.captain %}{{ team.captain.get_full_name|default:'Name not set' }}{% else %}-{% endif %}" data-vice-captain="{% if team.vice_captain %}{{ team.vice_captain.get_full_name|default:'Name not set' }}{% else %}-{% endif %}" data-trainer="{% if team.coordinator %}{{ team.coordinator.get_full_name|default:'Name not set' }}{% else %}-{% endif %}" data-status="{{ team.is_active|yesno:'Active,Inactive' }}"><i class="bi bi-eye"></i> View</button></li>
+                    {% endif %}
                     <li><button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#teamPlayersModal{{ team.pk }}"><i class="bi bi-people"></i> View Team Players</button></li>
-                    <li><button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#teamModal" data-mode="edit" data-id="{{ team.pk }}" data-sport="{{ team.sport_id }}" data-name="{{ team.name }}" data-type="{{ team.team_type }}" data-gender="{{ team.gender }}" data-captain="{{ team.captain_id|default:'' }}" data-vice-captain="{{ team.vice_captain_id|default:'' }}" data-coordinator="{{ team.coordinator_id|default:'' }}" data-active="{{ team.is_active|yesno:'true,false' }}"><i class="bi bi-pencil"></i> Edit</button></li>
-                    <li><button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#teamConfirmModal" data-action="{% if team.is_active %}deactivate{% else %}activate{% endif %}" data-id="{{ team.pk }}" data-title="{% if team.is_active %}Deactivate{% else %}Activate{% endif %} {{ team.name }}" data-message="Confirm this team status change."><i class="bi bi-toggle-off"></i> {% if team.is_active %}Deactivate{% else %}Activate{% endif %}</button></li>
-                    <li><button class="dropdown-item text-danger" data-bs-toggle="modal" data-bs-target="#teamConfirmModal" data-action="delete" data-id="{{ team.pk }}" data-title="Delete {{ team.name }}" data-message="This permanently deletes the team if the database allows it."><i class="bi bi-trash"></i> Delete</button></li>
+                    {% if user.is_superuser or user.profile.role == 'SUPER_ADMIN' or user.profile.role == 'SUB_ADMIN' %}
+                      <li><button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#teamModal" data-mode="edit" data-id="{{ team.pk }}" data-sport="{{ team.sport_id }}" data-name="{{ team.name }}" data-type="{{ team.team_type }}" data-gender="{{ team.gender }}" data-captain="{{ team.captain_id|default:'' }}" data-vice-captain="{{ team.vice_captain_id|default:'' }}" data-coordinator="{{ team.coordinator_id|default:'' }}" data-active="{{ team.is_active|yesno:'true,false' }}"><i class="bi bi-pencil"></i> Edit</button></li>
+                      <li><button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#teamConfirmModal" data-action="{% if team.is_active %}deactivate{% else %}activate{% endif %}" data-id="{{ team.pk }}" data-title="{% if team.is_active %}Deactivate{% else %}Activate{% endif %} {{ team.name }}" data-message="Confirm this team status change."><i class="bi bi-toggle-off"></i> {% if team.is_active %}Deactivate{% else %}Activate{% endif %}</button></li>
+                      <li><button class="dropdown-item text-danger" data-bs-toggle="modal" data-bs-target="#teamConfirmModal" data-action="delete" data-id="{{ team.pk }}" data-title="Delete {{ team.name }}" data-message="This permanently deletes the team if the database allows it."><i class="bi bi-trash"></i> Delete</button></li>
+                    {% endif %}
                   </ul>
                 </div>
               {% else %}-{% endif %}
@@ -68,9 +72,9 @@
           <div class="col-md-6"><label class="form-label">Team Name</label><input class="form-control" name="name" data-field="name" required></div>
           <div class="col-md-6"><label class="form-label">Team Type</label><select class="form-select" name="team_type" data-field="type" required><option value="" selected disabled>Select Team Type</option><option value="UNIVERSITY">University</option><option value="RESERVE">Reserve</option><option value="RECREATIONAL">Recreational</option></select></div>
           <div class="col-md-6"><label class="form-label">Male/Female Team</label><select class="form-select" name="gender" data-field="gender" required><option value="" selected disabled>Select Gender</option><option value="MALE">Male</option><option value="FEMALE">Female</option></select></div>
-          <div class="col-md-6"><label class="form-label">Captain</label><select class="form-select" name="captain" data-field="captain"><option value="">Select Captain</option>{% for item in users %}<option value="{{ item.pk }}">{{ item.get_full_name|default:item.username }}</option>{% endfor %}</select></div>
-          <div class="col-md-6"><label class="form-label">Vice Captain</label><select class="form-select" name="vice_captain" data-field="vice-captain"><option value="">Select Vice Captain</option>{% for item in users %}<option value="{{ item.pk }}">{{ item.get_full_name|default:item.username }}</option>{% endfor %}</select></div>
-          <div class="col-md-6"><label class="form-label">Trainer</label><select class="form-select" name="coordinator" data-field="coordinator"><option value="">Select Trainer</option>{% for item in trainer_users %}<option value="{{ item.pk }}">{{ item.get_full_name|default:item.username }}</option>{% endfor %}</select></div>
+          <div class="col-md-6"><label class="form-label">Captain</label><select class="form-select" name="captain" data-field="captain"><option value="">Select Captain</option>{% for item in users %}<option value="{{ item.pk }}" data-sports="{{ item.assigned_sport_ids_csv }}">{{ item.get_full_name|default:"Name not set" }}</option>{% endfor %}</select></div>
+          <div class="col-md-6"><label class="form-label">Vice Captain</label><select class="form-select" name="vice_captain" data-field="vice-captain"><option value="">Select Vice Captain</option>{% for item in users %}<option value="{{ item.pk }}" data-sports="{{ item.assigned_sport_ids_csv }}">{{ item.get_full_name|default:"Name not set" }}</option>{% endfor %}</select></div>
+          <div class="col-md-6"><label class="form-label">Trainer</label><select class="form-select" name="coordinator" data-field="coordinator"><option value="">Select Trainer</option>{% for item in trainer_users %}<option value="{{ item.pk }}">{{ item.get_full_name|default:"Name not set" }}</option>{% endfor %}</select></div>
           <div class="col-12"><div class="form-check"><input class="form-check-input" type="checkbox" name="is_active" data-field="active" checked><label class="form-check-label">Active</label></div></div>
         </div>
       </div>
@@ -88,17 +92,14 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
-        <form method="post" data-team-players-form>
-          {% csrf_token %}
-          <input type="hidden" name="action" value="update_team_players">
-          <input type="hidden" name="team_id" value="{{ team.pk }}">
+        {% if team.can_manage_players %}<form method="post" data-team-players-form>{% csrf_token %}<input type="hidden" name="action" value="update_team_players"><input type="hidden" name="team_id" value="{{ team.pk }}">{% endif %}
           <div class="table-responsive">
             <table class="table align-middle data-table">
-              <thead><tr><th>Select</th><th>Student</th><th>Email</th><th>Mobile</th><th>Current Role</th><th class="text-end">Profile</th></tr></thead>
+              <thead><tr>{% if team.can_manage_players %}<th data-filter="false">Select</th>{% endif %}<th data-filter="false">Student</th><th data-filter="false">Email</th><th data-filter="false">Mobile</th><th>Current Role</th><th class="text-end" data-filter="false">Profile</th></tr></thead>
               <tbody>
                 {% for student in team.player_candidates %}
                   <tr>
-                    <td><input type="hidden" name="all_player_ids" value="{{ student.pk }}"><input class="form-check-input" type="checkbox" name="players" value="{{ student.pk }}" {% if student.pk in team.active_member_ids %}checked{% endif %}></td>
+                    {% if team.can_manage_players %}<td><input type="hidden" name="all_player_ids" value="{{ student.pk }}"><input class="form-check-input" type="checkbox" name="players" value="{{ student.pk }}" {% if student.pk in team.active_member_ids %}checked{% endif %}></td>{% endif %}
                     <td><strong>{{ student.get_full_name|default:student.username }}</strong></td>
                     <td>{{ student.email }}</td>
                     <td>{{ student.profile.phone|default:"-" }}</td>
@@ -112,16 +113,16 @@
                     <td class="text-end"><a class="btn btn-sm btn-outline-primary" href="{% url 'member_detail' student.pk %}"><i class="bi bi-person"></i> View Profile</a></td>
                   </tr>
                 {% empty %}
-                  <tr><td colspan="6" class="empty-state">No students are available yet.</td></tr>
+                  <tr><td colspan="{% if team.can_manage_players %}6{% else %}5{% endif %}" class="empty-state">No students are available yet.</td></tr>
                 {% endfor %}
               </tbody>
             </table>
           </div>
           <div class="d-flex justify-content-end gap-2 mt-3">
-            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-            <button class="btn btn-primary" type="submit">Save Team Players</button>
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">{% if team.can_manage_players %}Cancel{% else %}Close{% endif %}</button>
+            {% if team.can_manage_players %}<button class="btn btn-primary" type="submit">Save Team Players</button>{% endif %}
           </div>
-        </form>
+        {% if team.can_manage_players %}</form>{% endif %}
       </div>
     </div>
   </div>
@@ -166,6 +167,24 @@
 
 {% block scripts %}
 <script>
+  function filterTeamLeaderOptions(modal) {
+    const sportId = modal.querySelector('[data-field="sport"]')?.value || '';
+    ['captain', 'vice-captain'].forEach(fieldName => {
+      const select = modal.querySelector(`[data-field="${fieldName}"]`);
+      if (!select) return;
+      Array.from(select.options).forEach(option => {
+        if (!option.value) return;
+        const sportIds = (option.dataset.sports || '').split(',').filter(Boolean);
+        const isAllowed = !sportId || sportIds.includes(sportId);
+        option.hidden = !isAllowed;
+        option.disabled = !isAllowed;
+      });
+      if (select.selectedOptions[0]?.disabled) {
+        select.value = '';
+      }
+    });
+  }
+
   document.getElementById('teamModal')?.addEventListener('show.bs.modal', event => {
     const b = event.relatedTarget;
     const modal = event.currentTarget;
@@ -177,6 +196,10 @@
       if (field) field.value = b?.dataset[key] || '';
     });
     modal.querySelector('[data-field="active"]').checked = b?.dataset.active !== 'false';
+    filterTeamLeaderOptions(modal);
+  });
+  document.getElementById('teamModal')?.querySelector('[data-field="sport"]')?.addEventListener('change', event => {
+    filterTeamLeaderOptions(event.currentTarget.closest('#teamModal'));
   });
   document.getElementById('teamConfirmModal')?.addEventListener('show.bs.modal', event => {
     const b = event.relatedTarget;

@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}Send Feedback{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><p class="eyebrow">Private</p><h1>Send Feedback</h1><p class="text-muted mb-0">Send confidential feedback for a selected practice session.</p></div>
+  <a class="btn btn-outline-secondary" href="{% url 'feedback' %}"><i class="bi bi-arrow-left"></i> Back</a>
+</div>
+
+<section class="panel">
+  <form method="post" class="row g-3" data-feedback-form>
+    {% csrf_token %}
+    <div class="col-md-6">
+      <label class="form-label">Send Feedback To</label>
+      <select class="form-select" name="recipient_type" data-field="recipient-type" required>
+        <option value="" selected disabled>Select Receiver</option>
+        {% for value, label in recipient_options %}
+          <option value="{{ value }}" {% if request.POST.recipient_type == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-6">
+      <label class="form-label">Session</label>
+      <select class="form-select" name="session" data-field="feedback-session" required>
+        <option value="" selected disabled>Select Session</option>
+        {% for session in sessions %}
+          <option value="{{ session.pk }}" data-trainer="{{ session.team.coordinator_id|default:'' }}" {% if request.POST.session == session.pk|stringformat:"s" %}selected{% endif %}>{{ session.title|default:"Practice session" }} - {{ session.team.sport.name }} - {{ session.team.get_gender_display }} {{ session.team.name }} ({{ session.start_at|date:"d M Y" }})</option>
+        {% empty %}
+          <option value="" disabled>No sessions available</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    {% if is_feedback_admin or is_feedback_trainer %}
+      <div class="col-md-6 d-none" data-student-field>
+        <label class="form-label">Student</label>
+        <select class="form-select" name="student" data-field="student">
+          <option value="" selected>Select Student</option>
+          {% for student in students %}
+            <option value="{{ student.pk }}" {% if request.POST.student == student.pk|stringformat:"s" %}selected{% endif %}>{{ student.get_full_name|default:student.email }}</option>
+          {% empty %}
+            <option value="" disabled>No students available</option>
+          {% endfor %}
+        </select>
+      </div>
+    {% endif %}
+
+    {% if is_feedback_admin or is_feedback_student %}
+      <div class="col-md-6 d-none" data-trainer-field>
+        <label class="form-label">Trainer</label>
+        <select class="form-select" name="trainer" data-field="trainer">
+          <option value="" selected>Select Trainer</option>
+          {% for trainer in trainers %}
+            <option value="{{ trainer.pk }}" {% if request.POST.trainer == trainer.pk|stringformat:"s" %}selected{% endif %}>{{ trainer.get_full_name|default:trainer.email }}</option>
+          {% empty %}
+            <option value="" disabled>No trainers available</option>
+          {% endfor %}
+        </select>
+      </div>
+    {% endif %}
+
+    <div class="col-12">
+      <label class="form-label">Feedback</label>
+      <textarea class="form-control" name="message" rows="5" required placeholder="Write your feedback...">{{ request.POST.message }}</textarea>
+    </div>
+    <div class="col-12 d-flex justify-content-end gap-2">
+      <a class="btn btn-outline-secondary" href="{% url 'feedback' %}">Cancel</a>
+      <button class="btn btn-primary" type="submit"><i class="bi bi-send"></i> Send Feedback</button>
+    </div>
+  </form>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  function syncFeedbackRecipients() {
+    const type = document.querySelector('[data-field="recipient-type"]')?.value || '';
+    const studentWrap = document.querySelector('[data-student-field]');
+    const trainerWrap = document.querySelector('[data-trainer-field]');
+    const trainerNote = document.querySelector('[data-trainer-note]');
+    const studentSelect = document.querySelector('[data-field="student"]');
+    const trainerSelect = document.querySelector('[data-field="trainer"]');
+    const needsStudent = type === 'student' || type === 'both';
+    const needsTrainer = type === 'trainer' || type === 'both';
+    studentWrap?.classList.toggle('d-none', !needsStudent);
+    trainerWrap?.classList.toggle('d-none', !needsTrainer);
+    trainerNote?.classList.toggle('d-none', !needsTrainer);
+    if (studentSelect) studentSelect.required = needsStudent && Boolean(studentWrap);
+    if (trainerSelect) trainerSelect.required = needsTrainer && Boolean(trainerWrap);
+    if (needsTrainer) syncAssignedTrainerDefault(false);
+  }
+
+  function syncAssignedTrainerDefault(force = true) {
+    const sessionSelect = document.querySelector('[data-field="feedback-session"]');
+    const trainerSelect = document.querySelector('[data-field="trainer"]');
+    if (!sessionSelect || !trainerSelect) return;
+    const assignedTrainer = sessionSelect.selectedOptions[0]?.dataset.trainer || '';
+    if (assignedTrainer && (force || !trainerSelect.value) && Array.from(trainerSelect.options).some(option => option.value === assignedTrainer)) {
+      trainerSelect.value = assignedTrainer;
+    }
+  }
+
+  document.querySelector('[data-field="recipient-type"]')?.addEventListener('change', syncFeedbackRecipients);
+  document.querySelector('[data-field="feedback-session"]')?.addEventListener('change', () => syncAssignedTrainerDefault(true));
+  syncFeedbackRecipients();
+</script>
+{% endblock %}

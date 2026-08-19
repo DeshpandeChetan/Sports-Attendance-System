@@ -89,6 +89,8 @@ class TeamForm(BootstrapFormMixin, forms.ModelForm):
 
     def clean(self):
         cleaned = super().clean()
+        sport = cleaned.get("sport")
+        gender = cleaned.get("gender")
         captain = cleaned.get("captain")
         vice_captain = cleaned.get("vice_captain")
         if captain and vice_captain and captain == vice_captain:
@@ -96,11 +98,34 @@ class TeamForm(BootstrapFormMixin, forms.ModelForm):
         for field_name, leader in (("captain", captain), ("vice_captain", vice_captain)):
             if not leader:
                 continue
-            existing = Team.objects.filter(Q(captain=leader) | Q(vice_captain=leader))
+            leader_name = leader.get_full_name() or leader.email or leader.username
+            if sport and not Membership.objects.filter(user=leader, team__sport=sport, is_active=True).exists():
+                label = "Captain" if field_name == "captain" else "Vice Captain"
+                self.add_error(field_name, f"{label} must be associated with the selected sport.")
+            if sport and gender:
+                same_group_memberships = Membership.objects.filter(
+                    user=leader,
+                    is_active=True,
+                    team__sport=sport,
+                    team__gender=gender,
+                ).select_related("team", "team__sport")
+                if self.instance and self.instance.pk:
+                    same_group_memberships = same_group_memberships.exclude(team=self.instance)
+                existing_membership = same_group_memberships.first()
+                if existing_membership:
+                    self.add_error(
+                        field_name,
+                        f"{leader_name} is already a member of {existing_membership.team} and cannot be assigned to another team category in the same Sport and Gender.",
+                    )
+            existing_captain = Team.objects.filter(captain=leader)
+            existing_vice_captain = Team.objects.filter(vice_captain=leader)
             if self.instance and self.instance.pk:
-                existing = existing.exclude(pk=self.instance.pk)
-            if existing.exists():
-                self.add_error(field_name, "This student is already Captain or Vice Captain of another team.")
+                existing_captain = existing_captain.exclude(pk=self.instance.pk)
+                existing_vice_captain = existing_vice_captain.exclude(pk=self.instance.pk)
+            if existing_captain.exists():
+                self.add_error(field_name, f"{leader_name} is already a captain of other team and cannot be captain again.")
+            if existing_vice_captain.exists():
+                self.add_error(field_name, f"{leader_name} is already a vice captain of other team and cannot be assigned again.")
         return cleaned
 
 

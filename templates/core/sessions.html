@@ -86,7 +86,7 @@
           <div class="col-md-6"><label class="form-label">Team</label><select class="form-select" name="team" data-field="team" required><option value="" selected disabled>Select Team</option>{% for team in teams %}<option value="{{ team.pk }}">{{ team.sport.name }} - {{ team.get_gender_display }} {{ team.name }}</option>{% endfor %}</select></div>
           <div class="col-md-6"><label class="form-label">Title</label><input class="form-control" name="title" data-field="title" placeholder="Practice session"></div>
           <div class="col-md-4"><label class="form-label">Start Date</label><input class="form-control" type="date" name="start_date" data-field="start-date" required></div>
-          <div class="col-md-4"><label class="form-label">End Date</label><input class="form-control" type="date" name="end_date" data-field="end-date" required></div>
+          <div class="col-md-4"><label class="form-label">End Date</label><input class="form-control" type="date" name="end_date" data-field="end-date" required><div class="invalid-feedback">End date cannot be before start date.</div></div>
           <div class="col-md-4"><label class="form-label">Schedule</label><select class="form-select" name="schedule_slot" data-field="slot" required><option value="" selected disabled>Select Schedule</option><option value="MORNING">Morning</option><option value="EVENING">Evening</option></select></div>
           <div class="col-md-6"><label class="form-label">Venue</label><select class="form-select" name="venue_choice" data-field="venue" required><option value="" selected disabled>Select Venue</option>{% for venue in venues %}<option value="{{ venue.name }}">{{ venue.name }}</option>{% endfor %}<option value="OTHER">Other</option></select></div>
           <div class="col-md-6 d-none" data-other-venue-wrap><label class="form-label">Specific Venue</label><input class="form-control" name="other_venue" data-field="other-venue"></div>
@@ -143,6 +143,16 @@
     const wrap = scope.querySelector('[data-other-venue-wrap]');
     if (wrap) wrap.classList.toggle('d-none', venue?.value !== 'OTHER');
   }
+  function validateSessionDates(modal) {
+    const start = modal.querySelector('[data-field="start-date"]');
+    const end = modal.querySelector('[data-field="end-date"]');
+    const invalid = Boolean(start?.value && end?.value && end.value < start.value);
+    if (end) {
+      end.classList.toggle('is-invalid', invalid);
+      end.setCustomValidity(invalid ? 'End date cannot be before start date.' : '');
+    }
+    return !invalid;
+  }
   document.getElementById('sessionModal')?.addEventListener('show.bs.modal', event => {
     const b = event.relatedTarget;
     const modal = event.currentTarget;
@@ -153,6 +163,7 @@
       modal.querySelector('form').reset();
       modal.querySelector('[data-field="id"]').value = '';
       toggleOtherVenue(modal);
+      validateSessionDates(modal);
       return;
     }
     ['id','team','title','startDate','endDate','slot','venue','otherVenue','notes'].forEach(key => {
@@ -160,6 +171,16 @@
       if (field) field.value = b?.dataset[key] || '';
     });
     toggleOtherVenue(modal);
+    validateSessionDates(modal);
+  });
+  document.getElementById('sessionModal')?.querySelector('form')?.addEventListener('submit', event => {
+    if (!validateSessionDates(event.currentTarget.closest('#sessionModal'))) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  });
+  document.getElementById('sessionModal')?.querySelectorAll('[data-field="start-date"], [data-field="end-date"]').forEach(input => {
+    input.addEventListener('change', event => validateSessionDates(event.currentTarget.closest('#sessionModal')));
   });
   document.getElementById('sessionModal')?.querySelector('[data-field="venue"]')?.addEventListener('change', event => {
     toggleOtherVenue(event.target.closest('#sessionModal'));

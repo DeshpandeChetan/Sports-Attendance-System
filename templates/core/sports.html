@@ -28,7 +28,7 @@
       <tbody>
         {% for sport in sports %}
           <tr>
-            <td><strong>{{ sport.name }}</strong><div class="text-muted small">{{ sport.description|default:"No description"|truncatewords:14 }}</div></td>
+            <td data-filter-value="{{ sport.name }}"><strong>{{ sport.name }}</strong><div class="text-muted small">{{ sport.description|default:"No description"|truncatewords:14 }}</div></td>
             <td>{{ sport.team_count }}</td>
             <td>{% if sport.is_active %}<span class="badge text-bg-success">Active</span>{% else %}<span class="badge text-bg-secondary">Inactive</span>{% endif %}</td>
             <td class="text-end">

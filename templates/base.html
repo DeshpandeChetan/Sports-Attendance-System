@@ -202,12 +202,16 @@
       headers.forEach((header, columnIndex) => {
         if (!header || header.toLowerCase() === 'actions') return;
         if (headerCells[columnIndex]?.dataset.filter === 'false') return;
-        const values = dataRows.map(row => row.children[columnIndex]?.textContent.trim()).filter(Boolean);
+        const filterLabel = headerCells[columnIndex]?.dataset.filterLabel || header;
+        const values = dataRows.map(row => {
+          const cell = row.children[columnIndex];
+          return (cell?.dataset.filterValue || cell?.textContent || '').trim();
+        }).filter(Boolean);
         const uniqueValues = Array.from(new Set(values)).sort();
         if (uniqueValues.length < 2) return;
         const id = `table-filter-${index}-${columnIndex}`;
         const holder = document.createElement('div');
-        holder.innerHTML = `<label class="form-label" for="${id}">${header}</label><select id="${id}" class="form-select form-select-sm" data-column="${columnIndex}"><option value="">Select ${header}</option>${uniqueValues.map(value => `<option value="${value.replaceAll('"', '&quot;')}">${value}</option>`).join('')}</select>`;
+        holder.innerHTML = `<label class="form-label" for="${id}">${filterLabel}</label><select id="${id}" class="form-select form-select-sm" data-column="${columnIndex}"><option value="">Select ${filterLabel}</option>${uniqueValues.map(value => `<option value="${value.replaceAll('"', '&quot;')}">${value}</option>`).join('')}</select>`;
         tools.appendChild(holder);
       });
       wrapper.parentNode.insertBefore(tools, wrapper);
@@ -325,7 +329,11 @@
         const filteredRows = dataRows.filter(row => {
           const rowText = row.textContent.toLowerCase();
           const matchesSearch = !query || rowText.includes(query);
-          const matchesFilters = filters.every(filter => !filter.value || row.children[filter.column]?.textContent.trim() === filter.value);
+          const matchesFilters = filters.every(filter => {
+            const cell = row.children[filter.column];
+            const value = (cell?.dataset.filterValue || cell?.textContent || '').trim();
+            return !filter.value || value === filter.value;
+          });
           return matchesSearch && matchesFilters;
         });
         const pageSize = Number(pageSizeSelect.value);

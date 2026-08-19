@@ -348,6 +348,47 @@ def role_label(user):
     return user.profile.get_role_display()
 
 
+def meeting_participant_role_label(user, teams, organizer=None):
+    if organizer and user.pk == organizer.pk:
+        return role_label(user)
+    roles = []
+    for team in teams:
+        if team.captain_id == user.pk:
+            roles.append("Captain")
+        if team.vice_captain_id == user.pk:
+            roles.append("Vice Captain")
+        if team.coordinator_id == user.pk:
+            roles.append("Trainer")
+    if roles:
+        return ", ".join(dict.fromkeys(roles))
+    return role_label(user)
+
+
+def meeting_participant_sports_label(user, teams, organizer=None):
+    selected_sport_names = sorted({team.sport.name for team in teams})
+    if organizer and user.pk == organizer.pk:
+        return ", ".join(selected_sport_names) or "-"
+    sport_names = set()
+    for team in teams:
+        if user.pk in {team.captain_id, team.vice_captain_id, team.coordinator_id}:
+            sport_names.add(team.sport.name)
+    sport_names.update(
+        Membership.objects.filter(
+            user=user,
+            is_active=True,
+            team__in=teams,
+        ).values_list("team__sport__name", flat=True)
+    )
+    sport_names.update(
+        Team.objects.filter(
+            coordinator=user,
+            sport__name__in=selected_sport_names,
+            is_active=True,
+        ).values_list("sport__name", flat=True)
+    )
+    return ", ".join(sorted(sport_names)) or "-"
+
+
 def split_full_name(full_name):
     parts = (full_name or "").strip().split(" ", 1)
     return parts[0] if parts else "", parts[1] if len(parts) > 1 else ""
@@ -575,6 +616,14 @@ def build_meeting_preview(post_data, organizer=None):
     participants = sorted(participants_by_id.values(), key=lambda item: (user_label(item).lower(), item.pk))
     if not participants:
         errors.append("No participants were found for the selected Trainers/Teams.")
+    participant_details = [
+        {
+            "name": user_label(participant),
+            "role": meeting_participant_role_label(participant, teams, organizer=organizer),
+            "sports": meeting_participant_sports_label(participant, teams, organizer=organizer),
+        }
+        for participant in participants
+    ]
     try:
         display_date = datetime.strptime(meeting_date, "%Y-%m-%d").strftime("%d/%m/%Y") if meeting_date else ""
     except ValueError:
@@ -616,7 +665,7 @@ def build_meeting_preview(post_data, organizer=None):
             "sports": [sport.name for sport in sports],
             "teams": [str(team) for team in teams],
             "trainers": [user_label(trainer) for trainer in trainers],
-            "participants": [user_label(participant) for participant in participants],
+            "participants": participant_details,
             "team_modes": {str(team.pk): "Complete Team" if team_modes.get(str(team.pk)) == "ALL" else "Captain and Vice Captain Only" for team in teams},
         },
     }
@@ -1079,6 +1128,12 @@ def teams_list(request):
             form = TeamForm(request.POST, instance=team)
             if form.is_valid():
                 saved_team = form.save()
+                for leader in (saved_team.captain, saved_team.vice_captain):
+                    if leader:
+                        membership, _ = Membership.objects.get_or_create(user=leader, team=saved_team)
+                        if not membership.is_active:
+                            membership.is_active = True
+                            membership.save(update_fields=["is_active", "updated_at"])
                 current_roles = {
                     "captain": saved_team.captain,
                     "vice_captain": saved_team.vice_captain,
@@ -1105,6 +1160,9 @@ def teams_list(request):
                     )
                 messages.success(request, "Team saved successfully.")
             else:
+                for field_errors in form.errors.values():
+                    for error in field_errors:
+                        messages.error(request, error)
                 messages.error(request, "Please correct the team details and try again.")
         elif action == "bulk_upload":
             try:
@@ -1194,15 +1252,43 @@ def teams_list(request):
         teams = teams.filter(Q(memberships__user=request.user) | Q(captain=request.user) | Q(vice_captain=request.user) | Q(coordinator=request.user)).distinct()
     teams = list(teams)
     student_roles = [UserProfile.Role.MEMBER, UserProfile.Role.CAPTAIN, UserProfile.Role.VICE_CAPTAIN]
+    can_manage_team_players = is_admin_user(request.user)
+    all_student_candidates = list(User.objects.filter(
+        is_active=True,
+        profile__role__in=student_roles,
+    ).distinct().select_related("profile").prefetch_related("memberships__team").order_by("first_name", "last_name", "email"))
     for team in teams:
         team.active_memberships = [membership for membership in team.memberships.all() if membership.is_active]
-        team.player_candidates = User.objects.filter(
-            is_active=True,
-            profile__role__in=student_roles,
-        ).distinct().select_related("profile").order_by("first_name", "last_name", "email")
         team.active_member_ids = {membership.user_id for membership in team.active_memberships}
+        team.can_manage_players = can_manage_team_players
+        team.can_view_players = (
+            can_manage_team_players
+            or request.user == team.coordinator
+            or request.user == team.captain
+            or request.user == team.vice_captain
+        )
+        if can_manage_team_players:
+            team.player_candidates = sorted(
+                all_student_candidates,
+                key=lambda student: (
+                    student.pk not in team.active_member_ids,
+                    (student.get_full_name() or student.email or student.username).lower(),
+                ),
+            )
+        else:
+            team.player_candidates = sorted(
+                [membership.user for membership in team.active_memberships],
+                key=lambda student: (student.get_full_name() or student.email or student.username).lower(),
+            )
     trainer_roles = [UserProfile.Role.TRAINER, UserProfile.Role.COORDINATOR]
-    users = User.objects.filter(is_active=True, profile__role__in=student_roles).order_by("first_name", "last_name", "username")
+    users = User.objects.filter(is_active=True, profile__role__in=student_roles).prefetch_related("memberships__team").order_by("first_name", "last_name", "username")
+    for student in users:
+        sport_ids = {
+            str(membership.team.sport_id)
+            for membership in student.memberships.all()
+            if membership.is_active
+        }
+        student.assigned_sport_ids_csv = ",".join(sorted(sport_ids))
     trainer_users = User.objects.filter(is_active=True, profile__role__in=trainer_roles).order_by("first_name", "last_name", "username")
     sports = Sport.objects.filter(is_active=True).order_by("name")
     return render(request, "core/teams.html", {"teams": teams, "users": users, "trainer_users": trainer_users, "sports": sports})
@@ -1749,6 +1835,9 @@ def sessions_list(request):
                 else:
                     messages.error(request, "You cannot schedule for this team.")
             else:
+                for field_errors in form.errors.values():
+                    for error in field_errors:
+                        messages.error(request, error)
                 messages.error(request, "Please correct the session details and try again.")
         elif action == "delete" and session:
             cancelled_title = session.title or "Practice session"
@@ -1809,6 +1898,9 @@ def meetings_list(request):
             if built["errors"]:
                 for error in built["errors"]:
                     messages.error(request, error)
+                request.session["meeting_draft"] = built["data"]
+                request.session.modified = True
+                return redirect("meetings")
             else:
                 request.session["meeting_preview"] = built
                 request.session.modified = True
@@ -2111,40 +2203,170 @@ def feedback_list(request):
     received = Feedback.objects.filter(receiver=request.user).select_related("sender", "session")
     sent = Feedback.objects.filter(sender=request.user).select_related("receiver", "session")
     received.update(is_read=True)
-    return render(request, "core/feedback.html", {"received": received, "sent": sent})
+    sent_groups_by_key = {}
+    for item in sent:
+        sent_at_key = timezone.localtime(item.created_at).strftime("%Y%m%d%H%M")
+        key = (item.session_id, item.message, sent_at_key)
+        receiver_name = user_label(item.receiver)
+        if key not in sent_groups_by_key:
+            sent_groups_by_key[key] = {
+                "receivers": [],
+                "created_at": item.created_at,
+                "message": item.message,
+                "session": item.session,
+            }
+        sent_groups_by_key[key]["receivers"].append(receiver_name)
+    sent_groups = sorted(sent_groups_by_key.values(), key=lambda item: item["created_at"], reverse=True)
+    for item in sent_groups:
+        item["receiver_names"] = ", ".join(item["receivers"])
+    return render(request, "core/feedback.html", {"received": received, "sent_groups": sent_groups})
+
+
+def feedback_type_for(sender, receiver):
+    if is_admin_user(sender):
+        return Feedback.FeedbackType.ADMIN_TO_STUDENT
+    if role_for(sender) in TRAINER_ROLES:
+        return Feedback.FeedbackType.COORDINATOR_TO_STUDENT
+    return Feedback.FeedbackType.STUDENT_TO_ADMIN
+
+
+def feedback_session_queryset(user):
+    qs = Session.objects.select_related("team", "team__sport").order_by("-start_at")
+    if is_admin_user(user):
+        return qs
+    if role_for(user) in TRAINER_ROLES:
+        return qs.filter(team__coordinator=user)
+    assigned_teams = Team.objects.filter(
+        Q(memberships__user=user, memberships__is_active=True)
+        | Q(captain=user)
+        | Q(vice_captain=user)
+    ).distinct()
+    return qs.filter(team__in=assigned_teams)
+
+
+def feedback_student_queryset(user):
+    student_roles = [UserProfile.Role.MEMBER, UserProfile.Role.CAPTAIN, UserProfile.Role.VICE_CAPTAIN]
+    qs = User.objects.filter(is_active=True, profile__role__in=student_roles).select_related("profile").order_by("first_name", "last_name", "email")
+    if is_admin_user(user):
+        return qs.distinct()
+    if role_for(user) in TRAINER_ROLES:
+        return qs.filter(memberships__team__coordinator=user, memberships__is_active=True).distinct()
+    return User.objects.none()
+
+
+def feedback_trainer_queryset():
+    return User.objects.filter(
+        is_active=True,
+        profile__role__in=[UserProfile.Role.TRAINER, UserProfile.Role.COORDINATOR],
+    ).select_related("profile").order_by("first_name", "last_name", "email").distinct()
 
 
 @login_required
 def send_feedback(request):
-    if is_admin_user(request.user) or role_for(request.user) == UserProfile.Role.COORDINATOR:
-        form = FeedbackForm(request.POST or None)
-        feedback_type = Feedback.FeedbackType.ADMIN_TO_STUDENT if is_admin_user(request.user) else Feedback.FeedbackType.COORDINATOR_TO_STUDENT
+    sessions = feedback_session_queryset(request.user)
+    students = feedback_student_queryset(request.user)
+    trainers = feedback_trainer_queryset()
+    admins = admin_users()
+    user_role = role_for(request.user)
+    if is_admin_user(request.user):
+        recipient_options = [("student", "Student"), ("trainer", "Trainer"), ("both", "Both Student and Trainer")]
+    elif user_role in TRAINER_ROLES:
+        recipient_options = [("admin", "Admin"), ("student", "Student"), ("both", "Both Admin and Student")]
     else:
-        form = SessionFeedbackForm(request.POST or None, user=request.user)
-        feedback_type = Feedback.FeedbackType.STUDENT_TO_ADMIN
-    if request.method == "POST" and form.is_valid():
-        feedback = form.save(commit=False)
-        feedback.sender = request.user
-        feedback.feedback_type = feedback_type
-        if feedback_type == Feedback.FeedbackType.STUDENT_TO_ADMIN:
-            feedback.receiver = User.objects.filter(Q(profile__role__in=ADMIN_ROLES) | Q(is_superuser=True)).first()
-        if not feedback.receiver:
-            messages.error(request, "No receiver is available for this feedback.")
+        recipient_options = [("admin", "Admin"), ("trainer", "Trainer"), ("both", "Both Admin and Trainer")]
+
+    if request.method == "POST":
+        recipient_type = request.POST.get("recipient_type")
+        session_id = request.POST.get("session")
+        student_id = request.POST.get("student")
+        trainer_id = request.POST.get("trainer")
+        message_text = (request.POST.get("message") or "").strip()
+        session = sessions.filter(pk=session_id).first() if session_id else None
+        receivers = []
+        errors = []
+        if recipient_type not in {item[0] for item in recipient_options}:
+            errors.append("Select whom to send feedback to.")
+        if not session:
+            errors.append("Select Session.")
+        if not message_text:
+            errors.append("Feedback message is required.")
+
+        if is_admin_user(request.user):
+            if recipient_type in {"student", "both"}:
+                student = students.filter(pk=student_id).first() if student_id else None
+                if student:
+                    receivers.append(student)
+                else:
+                    errors.append("Select Student.")
+            if recipient_type in {"trainer", "both"}:
+                trainer = trainers.filter(pk=trainer_id).first() if trainer_id else None
+                if trainer:
+                    receivers.append(trainer)
+                else:
+                    errors.append("Select Trainer.")
+        elif user_role in TRAINER_ROLES:
+            if recipient_type in {"admin", "both"}:
+                receivers.extend(admins)
+            if recipient_type in {"student", "both"}:
+                student = students.filter(pk=student_id).first() if student_id else None
+                if student:
+                    receivers.append(student)
+                else:
+                    errors.append("Select Student.")
+        else:
+            if recipient_type in {"admin", "both"}:
+                receivers.extend(admins)
+            if recipient_type in {"trainer", "both"}:
+                trainer = trainers.filter(pk=trainer_id).first() if trainer_id else None
+                if not trainer and session:
+                    trainer = session.team.coordinator
+                if trainer:
+                    receivers.append(trainer)
+                else:
+                    errors.append("No trainer is assigned to the selected session.")
+
+        unique_receivers = []
+        seen = set()
+        for receiver in receivers:
+            if receiver and receiver.pk != request.user.pk and receiver.pk not in seen:
+                seen.add(receiver.pk)
+                unique_receivers.append(receiver)
+        if not unique_receivers:
+            errors.append("No receiver is available for this feedback.")
+        if errors:
+            for error in errors:
+                messages.error(request, error)
+        else:
+            for receiver in unique_receivers:
+                Feedback.objects.create(
+                    sender=request.user,
+                    receiver=receiver,
+                    session=session,
+                    feedback_type=feedback_type_for(request.user, receiver),
+                    message=message_text,
+                )
+            create_notifications(
+                unique_receivers,
+                "New feedback received",
+                f"{request.user.get_full_name() or request.user.email} sent you private feedback.",
+                actor=request.user,
+                target_url=reverse("feedback"),
+                session=session,
+                team=session.team if session else None,
+                sport=session.team.sport if session else None,
+            )
+            messages.success(request, f"Feedback sent to {len(unique_receivers)} recipient(s).")
             return redirect("feedback")
-        feedback.save()
-        create_notifications(
-            [feedback.receiver],
-            "New feedback received",
-            f"{request.user.get_full_name() or request.user.email} sent you private feedback.",
-            actor=request.user,
-            target_url=reverse("feedback"),
-            session=feedback.session,
-            team=feedback.session.team if feedback.session else None,
-            sport=feedback.session.team.sport if feedback.session else None,
-        )
-        messages.success(request, "Feedback sent privately.")
-        return redirect("feedback")
-    return render(request, "core/form.html", {"form": form, "title": "Feedback", "back_url": reverse("feedback")})
+    return render(request, "core/send_feedback.html", {
+        "title": "Send Feedback",
+        "recipient_options": recipient_options,
+        "sessions": sessions,
+        "students": students,
+        "trainers": trainers,
+        "is_feedback_admin": is_admin_user(request.user),
+        "is_feedback_trainer": user_role in TRAINER_ROLES,
+        "is_feedback_student": not is_admin_user(request.user) and user_role not in TRAINER_ROLES,
+    })
 
 
 @login_required

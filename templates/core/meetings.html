@@ -27,7 +27,7 @@
           <div class="col-md-3"><label class="form-label">Venue</label><select class="form-select" name="venue" data-field="meeting-venue" required><option value="" selected disabled>Select Venue</option>{% for venue in venues %}<option value="{{ venue.name }}">{{ venue.name }}</option>{% endfor %}<option value="OTHER">Other</option></select></div>
           <div class="col-md-3 d-none" data-meeting-other-venue-wrap><label class="form-label">Specific Venue</label><input class="form-control" name="other_venue" data-field="meeting-other-venue"></div>
           <div class="col-md-3"><label class="form-label">Start Time</label><input class="form-control" type="time" name="start_time" required></div>
-          <div class="col-md-3"><label class="form-label">End Time</label><input class="form-control" type="time" name="end_time" required></div>
+          <div class="col-md-3"><label class="form-label">End Time</label><input class="form-control" type="time" name="end_time" required><div class="invalid-feedback">End Time must be after Start Time.</div></div>
           <div class="col-md-4">
             <label class="form-label">Sports</label>
             <div class="dropdown multi-select-dropdown">
@@ -40,6 +40,7 @@
                 {% endfor %}
               </div>
             </div>
+            <div class="invalid-feedback d-none" data-field="meeting-sports-error">Select at least one Sport.</div>
           </div>
           <div class="col-md-4">
             <label class="form-label">Teams</label>
@@ -68,7 +69,7 @@
             </div>
           </div>
           <div class="col-12">
-            <label class="form-label">Team Participants</label>
+            <label class="form-label">Meeting Participants</label>
             <div class="team-check-list" data-field="participant-mode-list">
               {% for team in teams %}
                 <div class="team-check-item d-none" data-team-mode="{{ team.pk }}" data-sport="{{ team.sport_id }}">
@@ -117,7 +118,12 @@
         <div class="section-title"><h2>Final Participants</h2><span class="badge text-bg-light">{{ meeting_preview.preview.participants|length }} Participants</span></div>
         <div class="team-check-list">
           {% for participant in meeting_preview.preview.participants %}
-            <div class="team-check-item"><span>{{ participant }}</span></div>
+            <div class="team-check-item">
+              <span>
+                {{ participant.name }}
+                <small>{{ participant.role }}{% if participant.sports %} - {{ participant.sports }}{% endif %}</small>
+              </span>
+            </div>
           {% endfor %}
         </div>
       </div>
@@ -149,6 +155,32 @@
     if (input) input.required = isOther;
   }
 
+  function validateMeetingTimes(form) {
+    const start = form.querySelector('[name="start_time"]');
+    const end = form.querySelector('[name="end_time"]');
+    const invalid = Boolean(start?.value && end?.value && end.value <= start.value);
+    if (end) {
+      end.classList.toggle('is-invalid', invalid);
+      end.setCustomValidity(invalid ? 'End Time must be after Start Time.' : '');
+    }
+    return !invalid;
+  }
+
+  function validateMeetingSports() {
+    const invalid = selectedMeetingSports().size === 0;
+    const button = document.querySelector('[data-field="meeting-sports-label"]');
+    const error = document.querySelector('[data-field="meeting-sports-error"]');
+    button?.classList.toggle('is-invalid', invalid);
+    error?.classList.toggle('d-none', !invalid);
+    return !invalid;
+  }
+
+  function validateMeetingForm(form) {
+    const timeValid = validateMeetingTimes(form);
+    const sportsValid = validateMeetingSports();
+    return timeValid && sportsValid;
+  }
+
   function syncDropdownLabel(field, labelField, fallback) {
     const checked = Array.from(document.querySelectorAll(`[data-field="${field}"]:checked`));
     const label = document.querySelector(`[data-field="${labelField}"]`);
@@ -178,6 +210,7 @@
     });
     syncDropdownLabel('meeting-sport-check', 'meeting-sports-label', 'Select Sports');
     syncDropdownLabel('meeting-team-check', 'meeting-teams-label', 'Select Teams');
+    if (sports.size) validateMeetingSports();
     syncMeetingParticipantModes();
   }
 
@@ -230,6 +263,15 @@
   document.querySelectorAll('[data-field="meeting-trainer-check"]').forEach(input => input.addEventListener('change', () => {
     syncDropdownLabel('meeting-trainer-check', 'meeting-trainers-label', 'Select Trainers');
   }));
+  document.getElementById('meetingForm')?.addEventListener('submit', event => {
+    if (!validateMeetingForm(event.currentTarget)) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  });
+  document.getElementById('meetingForm')?.querySelectorAll('[name="start_time"], [name="end_time"]').forEach(input => {
+    input.addEventListener('change', event => validateMeetingTimes(event.currentTarget.closest('form')));
+  });
   document.querySelector('[data-field="meeting-venue"]')?.addEventListener('change', toggleMeetingOtherVenue);
   syncMeetingTeams();
   toggleMeetingOtherVenue();
