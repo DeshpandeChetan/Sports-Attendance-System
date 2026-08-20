@@ -33,6 +33,7 @@ from .forms import (
     VenueForm,
 )
 from .email_validation import validate_christ_email
+from .email_notifications import queue_notification_emails
 from .models import (
     AttendanceDelegate,
     AttendanceDelegateLog,
@@ -241,14 +242,16 @@ def can_view_student_user(user, student):
     return False
 
 
-def create_notifications(users, title, message, actor=None, target_url="", sport=None, team=None, session=None, include_actor=False):
+def create_notifications(users, title, message, actor=None, target_url="", sport=None, team=None, session=None, include_actor=False, email_type=None, email_context=None):
     notifications = []
+    recipients = []
     seen = set()
     actor_id = getattr(actor, "pk", None)
     for user in users:
         if not user or user.pk in seen or (user.pk == actor_id and not include_actor):
             continue
         seen.add(user.pk)
+        recipients.append(user)
         notifications.append(Notification(
             user=user,
             actor=actor if getattr(actor, "is_authenticated", False) else None,
@@ -261,6 +264,10 @@ def create_notifications(users, title, message, actor=None, target_url="", sport
         ))
     if notifications:
         Notification.objects.bulk_create(notifications)
+        if email_type:
+            context = {"title": title, "message": message, **(email_context or {})}
+            # Email is best-effort and internally catches every delivery failure.
+            queue_notification_emails(recipients, email_type, context)
 
 
 def notify_team_membership_change(actor, users, team, change):
@@ -283,6 +290,8 @@ def notify_team_membership_change(actor, users, team, change):
         sport=team.sport,
         team=team,
         include_actor=True,
+        email_type="team_membership",
+        email_context={"details": [("Sport", team.sport.name), ("Team", f"{team.get_gender_display()} {team.name}"), ("Changed By", user_label(actor))]},
     )
 
 
@@ -301,10 +310,12 @@ def notify_team_role_change(actor, user, team, role_name, assigned=True):
         sport=team.sport,
         team=team,
         include_actor=True,
+        email_type=f"{role_name.lower().replace(' ', '_')}_{'assigned' if assigned else 'removed'}",
+        email_context={"details": [("Sport", team.sport.name), ("Team", f"{team.get_gender_display()} {team.name}"), ("Role", role_name), ("Updated By", user_label(actor))]},
     )
 
 
-def notify_practice_session(session, title, message, actor, teams=None, include_session=True):
+def notify_practice_session(session, title, message, actor, teams=None, include_session=True, email_type="practice_updated"):
     notification_teams = teams or [session.team]
     for team in notification_teams:
         create_notifications(
@@ -316,11 +327,22 @@ def notify_practice_session(session, title, message, actor, teams=None, include_
             sport=team.sport,
             team=team,
             session=session if include_session else None,
+            email_type=email_type,
+            email_context={
+                "details": [
+                    ("Sport", team.sport.name),
+                    ("Team", f"{team.get_gender_display()} {team.name}"),
+                    ("Date", timezone.localtime(session.start_at).strftime("%d %B %Y")),
+                    ("Time / Schedule", f"{timezone.localtime(session.start_at):%I:%M %p} – {timezone.localtime(session.end_at):%I:%M %p} ({session.get_schedule_slot_display()})"),
+                    ("Venue", session.venue),
+                    ("Scheduled / Updated By", user_label(actor)),
+                ]
+            },
         )
 
 
-def notify_common_action(actor, title, message, target_url):
-    create_notifications(User.objects.filter(is_active=True), title, message, actor=actor, target_url=target_url)
+def notify_common_action(actor, title, message, target_url, email_type=None, email_context=None):
+    create_notifications(User.objects.filter(is_active=True), title, message, actor=actor, target_url=target_url, email_type=email_type, email_context=email_context)
 
 
 def user_label(user):
@@ -1005,6 +1027,8 @@ def import_sessions_from_file(uploaded_file, user):
             sport=team.sport,
             team=team,
             session=session,
+            email_type="practice_scheduled",
+            email_context={"details": [("Sport", team.sport.name), ("Team", f"{team.get_gender_display()} {team.name}"), ("Date", timezone.localtime(session.start_at).strftime("%d %B %Y")), ("Time / Schedule", f"{timezone.localtime(session.start_at):%I:%M %p} – {timezone.localtime(session.end_at):%I:%M %p} ({session.get_schedule_slot_display()})"), ("Venue", session.venue), ("Scheduled By", user_label(user))]},
         )
         created += 1
     return created, errors
@@ -1028,6 +1052,8 @@ def sports_list(request):
                         "New sport added",
                         f"{saved_sport.name} has been added to the sports department.",
                         reverse("sports"),
+                        email_type="sport_created",
+                        email_context={"details": [("Sport", saved_sport.name), ("Added By", user_label(request.user))]},
                     )
                 messages.success(request, "Sport saved successfully.")
             else:
@@ -1152,11 +1178,16 @@ def teams_list(request):
                     if current_user and current_user != previous_user:
                         notify_team_role_change(request.user, current_user, saved_team, role_label, assigned=True)
                 if action == "create":
-                    notify_common_action(
-                        request.user,
+                    create_notifications(
+                        users_for_team(saved_team),
                         "New team added",
                         f"{saved_team} has been created.",
-                        reverse("teams"),
+                        actor=request.user,
+                        target_url=reverse("teams"),
+                        sport=saved_team.sport,
+                        team=saved_team,
+                        email_type="team_created",
+                        email_context={"details": [("Sport", saved_team.sport.name), ("Team", f"{saved_team.get_gender_display()} {saved_team.name}"), ("Team Type", saved_team.get_team_type_display()), ("Created By", user_label(request.user))]},
                     )
                 messages.success(request, "Team saved successfully.")
             else:
@@ -1638,6 +1669,7 @@ def trainers_list(request):
                 messages.error(request, "Mobile number must be exactly 10 digits.")
                 return redirect("trainers")
             trainer = trainer or User.objects.filter(email__iexact=email).first()
+            previous_team_ids = set(Team.objects.filter(coordinator=trainer).values_list("pk", flat=True)) if trainer else set()
             try:
                 validate_unique_register_no(register_no, trainer)
             except ValueError as exc:
@@ -1660,6 +1692,13 @@ def trainers_list(request):
             profile.save(update_fields=["role", "phone", "register_no", "updated_at"])
             Team.objects.filter(coordinator=trainer).exclude(pk__in=selected_team_ids).update(coordinator=None)
             Team.objects.filter(pk__in=selected_team_ids).update(coordinator=trainer)
+            selected_ids = set(Team.objects.filter(pk__in=selected_team_ids).values_list("pk", flat=True))
+            changed_teams = Team.objects.filter(pk__in=previous_team_ids | selected_ids).select_related("sport")
+            for changed_team in changed_teams:
+                if changed_team.pk in previous_team_ids and changed_team.pk not in selected_ids:
+                    notify_team_role_change(request.user, trainer, changed_team, "Trainer", assigned=False)
+                elif changed_team.pk in selected_ids and changed_team.pk not in previous_team_ids:
+                    notify_team_role_change(request.user, trainer, changed_team, "Trainer", assigned=True)
             if action == "create" and is_new_trainer:
                 notify_common_action(
                     request.user,
@@ -1817,6 +1856,7 @@ def sessions_list(request):
                             "New practice session",
                             f"{obj.title or 'Practice session'} scheduled for {obj.team}.",
                             actor=request.user,
+                            email_type="practice_scheduled",
                         )
                     else:
                         updated_schedule = (obj.start_at, obj.end_at, obj.schedule_slot, obj.team_id)
@@ -1830,6 +1870,7 @@ def sessions_list(request):
                             f"{obj.title or 'Practice session'} updated for {obj.team}.",
                             actor=request.user,
                             teams=impacted_teams,
+                            email_type="practice_rescheduled" if original_schedule != updated_schedule else "practice_updated",
                         )
                     messages.success(request, "Practice session saved successfully.")
                 else:
@@ -1850,6 +1891,7 @@ def sessions_list(request):
                 actor=request.user,
                 teams=[cancelled_team],
                 include_session=False,
+                email_type="practice_cancelled",
             )
             messages.success(request, "Practice session deleted.")
         return redirect("sessions")
@@ -1946,6 +1988,15 @@ def meetings_list(request):
                     f"{meeting.title} scheduled on {preview_data.get('display_date') or data['meeting_date']} from {preview_data.get('display_start_time') or data['start_time']} to {preview_data.get('display_end_time') or data['end_time']} at {meeting.venue}.",
                     actor=request.user,
                     target_url=reverse("meetings"),
+                    email_type="meeting_scheduled",
+                    email_context={"details": [
+                        ("Title", meeting.title),
+                        ("Date", preview_data.get("display_date") or data["meeting_date"]),
+                        ("Time", f"{preview_data.get('display_start_time') or data['start_time']} – {preview_data.get('display_end_time') or data['end_time']}"),
+                        ("Venue", meeting.venue),
+                        ("Agenda", meeting.agenda),
+                        ("Scheduled By", user_label(request.user)),
+                    ]},
                 )
             request.session.pop("meeting_preview", None)
             messages.success(request, "Meeting scheduled and participants notified.")
@@ -1996,6 +2047,7 @@ def session_form(request, pk=None):
                 "New practice session",
                 f"{obj.title or 'Practice session'} scheduled for {obj.team}.",
                 actor=request.user,
+                email_type="practice_scheduled",
             )
         else:
             updated_schedule = (obj.start_at, obj.end_at, obj.schedule_slot, obj.team_id)
@@ -2009,6 +2061,7 @@ def session_form(request, pk=None):
                 f"{obj.title or 'Practice session'} updated for {obj.team}.",
                 actor=request.user,
                 teams=impacted_teams,
+                email_type="practice_rescheduled" if original_schedule != updated_schedule else "practice_updated",
             )
         messages.success(request, "Practice session saved.")
         return redirect("sessions")
@@ -2053,15 +2106,18 @@ def delegate_attendance(request, pk):
                 changed_by=request.user,
                 reason=reason,
             )
-            Notification.objects.create(
-                user=delegate.assigned_to,
+            create_notifications(
+                [delegate.assigned_to],
+                "Session Incharge assigned",
+                f"You have been assigned as Session Incharge for {session.title or 'Practice session'} - {session.team} on {timezone.localtime(session.start_at):%d %b %Y}.",
                 actor=request.user,
-                title="Session Incharge assigned",
-                message=f"You have been assigned as Session Incharge for {session.title or 'Practice session'} - {session.team} on {timezone.localtime(session.start_at):%d %b %Y}.",
                 target_url=reverse("sessions"),
                 sport=session.team.sport,
                 team=session.team,
                 session=session,
+                include_actor=True,
+                email_type="session_incharge",
+                email_context={"details": [("Sport", session.team.sport.name), ("Team", f"{session.team.get_gender_display()} {session.team.name}"), ("Session", session.title), ("Date", timezone.localtime(session.start_at).strftime("%d %B %Y")), ("Assigned By", user_label(request.user))]},
             )
         messages.success(request, "Attendance delegate assigned.")
         return redirect("sessions")
@@ -2354,6 +2410,8 @@ def send_feedback(request):
                 session=session,
                 team=session.team if session else None,
                 sport=session.team.sport if session else None,
+                email_type="feedback_received",
+                email_context={"details": [("From", user_label(request.user)), ("Session", session.title if session else "General feedback"), ("Received", timezone.localtime().strftime("%d %B %Y, %I:%M %p"))]},
             )
             messages.success(request, f"Feedback sent to {len(unique_receivers)} recipient(s).")
             return redirect("feedback")

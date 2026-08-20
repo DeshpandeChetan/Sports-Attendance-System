@@ -13,8 +13,14 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 from pathlib import Path
 import os
 
+from dotenv import load_dotenv
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Load local development secrets without replacing variables explicitly supplied
+# by the operating system or hosting environment.
+load_dotenv(BASE_DIR / '.env', override=False)
 
 
 # Quick-start development settings - unsuitable for production
@@ -165,3 +171,26 @@ ALLOWED_GOOGLE_EMAIL_DOMAINS = [
     for domain in os.getenv('ALLOWED_GOOGLE_EMAIL_DOMAINS', 'christuniversity.in').split(',')
     if domain.strip()
 ]
+
+# Outbound notifications. Credentials must be supplied as environment variables.
+EMAIL_NOTIFICATIONS_ENABLED = os.getenv('EMAIL_NOTIFICATIONS_ENABLED', 'false').lower() in {'1', 'true', 'yes', 'on'}
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp.gmail.com')
+EMAIL_PORT = int(os.getenv('EMAIL_PORT', '587'))
+EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'true').lower() in {'1', 'true', 'yes', 'on'}
+EMAIL_USE_SSL = os.getenv('EMAIL_USE_SSL', 'false').lower() in {'1', 'true', 'yes', 'on'}
+EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER)
+EMAIL_TIMEOUT = int(os.getenv('EMAIL_TIMEOUT', '15'))
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {'console': {'class': 'logging.StreamHandler'}},
+    'loggers': {
+        'core.email_notifications': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
+        'core.email_worker': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
+        'core.management.commands.runserver': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
+    },
+}

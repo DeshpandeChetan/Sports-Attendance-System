@@ -75,3 +75,48 @@ Sites: 127.0.0.1:8000
 ```
 
 The first Google user who signs in is automatically promoted to Super Admin for initial setup.
+
+## Email Notification Setup
+
+Email notifications are disabled until SMTP credentials are supplied through the process environment. For the sender mailbox, configure:
+
+```text
+EMAIL_NOTIFICATIONS_ENABLED=true
+EMAIL_HOST=smtp.gmail.com
+EMAIL_PORT=587
+EMAIL_USE_TLS=true
+EMAIL_USE_SSL=false
+EMAIL_HOST_USER=sports.lavasa@christuniversity.in
+EMAIL_HOST_PASSWORD=<mailbox password or app password>
+DEFAULT_FROM_EMAIL=sports.lavasa@christuniversity.in
+```
+
+For local development, copy `.env.example` to `.env`, set the values there, and restart Django. The project loads the root `.env` file automatically. Operating-system or hosting environment variables take priority over values in `.env`.
+
+Add the app password only to this line in the untracked root `.env` file:
+
+```text
+EMAIL_HOST_PASSWORD=your-app-password
+```
+
+Do not add it to `.env.example`, `settings.py`, source control, screenshots, or application logs. `.env` is included in `.gitignore`.
+
+The application always uses Gmail SMTP for enabled email notifications. The configured Google account must have 2-Step Verification and a valid app password, and must be allowed to send as `DEFAULT_FROM_EMAIL`.
+
+Test SMTP connectivity and authentication without sending a message:
+
+```powershell
+.\.venv\Scripts\python.exe manage.py test_smtp
+```
+
+The command reports whether connection/TLS or SMTP-provider authentication failed and never displays the configured password.
+
+## Background Email Worker
+
+Notification emails are queued in the database so web requests never wait for SMTP. During local development, `runserver` automatically starts exactly one background email worker (including when Django's autoreloader is enabled), so this is the only command required:
+
+```powershell
+.\.venv\Scripts\python.exe manage.py runserver
+```
+
+The automatic worker stops with the development server. In production, run `run_email_worker` as a continuously supervised service because production WSGI/ASGI servers manage multiple processes differently. It safely retries failed recipients and logs SMTP failures. To process currently queued jobs and exit, use `run_email_worker --once`.

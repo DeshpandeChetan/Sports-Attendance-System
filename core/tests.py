@@ -2,15 +2,103 @@ from io import BytesIO
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
+from django.test import override_settings
+from django.core import mail
+from django.core.management import call_command
+from unittest.mock import patch
 from django.urls import reverse
 from django.utils import timezone
 from openpyxl import Workbook
 
-from .models import AttendanceRecord, Membership, Session, Sport, Team, UserProfile
+from .models import AttendanceRecord, EmailNotificationJob, Membership, Session, Sport, Team, UserProfile
 from .views import import_students_from_file
+from .email_notifications import queue_notification_emails, send_notification_emails
 
 
 User = get_user_model()
+
+
+@override_settings(
+    EMAIL_NOTIFICATIONS_ENABLED=True,
+    EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+    DEFAULT_FROM_EMAIL="sports.lavasa@christuniversity.in",
+)
+class EmailNotificationTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="mail-recipient@christuniversity.in",
+            email="mail-recipient@christuniversity.in",
+            first_name="Mail",
+            last_name="Recipient",
+        )
+
+    def test_sends_one_html_email_for_duplicate_recipient(self):
+        send_notification_emails(
+            [self.user, self.user],
+            "meeting_scheduled",
+            {"title": "New meeting scheduled", "message": "A meeting was scheduled.", "details": [("Venue", "Seminar Hall")]},
+        )
+
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, [self.user.email])
+        self.assertIn("Meeting Scheduled", mail.outbox[0].subject)
+        self.assertTrue(mail.outbox[0].alternatives)
+        html = mail.outbox[0].alternatives[0].content
+        self.assertIn("Dear Mail Recipient", html)
+        self.assertIn("Seminar Hall", html)
+        self.assertNotIn("{{", html)
+        self.assertNotIn("}}", html)
+
+    @patch("core.email_notifications.get_connection")
+    def test_queue_does_not_open_smtp_connection(self, mocked_get_connection):
+        queue_notification_emails(
+            [self.user, self.user],
+            "practice_scheduled",
+            {"title": "Practice", "message": "Practice scheduled."},
+        )
+
+        mocked_get_connection.assert_not_called()
+        job = EmailNotificationJob.objects.get()
+        self.assertEqual(job.recipient_user_ids, [self.user.pk])
+
+    def test_worker_delivers_queued_email(self):
+        job = queue_notification_emails(
+            [self.user],
+            "practice_scheduled",
+            {"title": "Practice", "message": "Practice scheduled."},
+        )
+
+        call_command("run_email_worker", once=True, verbosity=0)
+
+        job.refresh_from_db()
+        self.assertEqual(job.status, EmailNotificationJob.Status.SENT)
+        self.assertEqual(len(mail.outbox), 1)
+
+    @patch("core.email_notifications.EmailMultiAlternatives.send", side_effect=RuntimeError("SMTP unavailable"))
+    def test_delivery_failure_does_not_escape(self, mocked_send):
+        send_notification_emails(
+            [self.user],
+            "feedback_received",
+            {"title": "New feedback", "message": "Feedback received."},
+        )
+        mocked_send.assert_called_once()
+
+    @patch("core.email_notifications.get_connection")
+    def test_batch_authentication_failure_is_attempted_only_once(self, mocked_get_connection):
+        second_user = User.objects.create_user(
+            username="second-recipient@christuniversity.in",
+            email="second-recipient@christuniversity.in",
+        )
+        connection = mocked_get_connection.return_value
+        connection.open.side_effect = RuntimeError("Authentication rejected")
+
+        send_notification_emails(
+            [self.user, second_user],
+            "practice_scheduled",
+            {"title": "Practice", "message": "Practice scheduled."},
+        )
+
+        connection.open.assert_called_once_with()
 
 
 class TrainerStudentPermissionTests(TestCase):

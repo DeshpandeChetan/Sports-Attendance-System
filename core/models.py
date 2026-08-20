@@ -277,3 +277,26 @@ class Notification(TimeStampedModel):
 
     def __str__(self):
         return f"{self.title} for {self.user}"
+
+
+class EmailNotificationJob(TimeStampedModel):
+    class Status(models.TextChoices):
+        PENDING = "PENDING", "Pending"
+        PROCESSING = "PROCESSING", "Processing"
+        SENT = "SENT", "Sent"
+        FAILED = "FAILED", "Failed"
+
+    notification_type = models.CharField(max_length=80)
+    context = models.JSONField(default=dict)
+    recipient_user_ids = models.JSONField(default=list)
+    status = models.CharField(max_length=12, choices=Status.choices, default=Status.PENDING, db_index=True)
+    attempts = models.PositiveSmallIntegerField(default=0)
+    next_attempt_at = models.DateTimeField(default=timezone.now, db_index=True)
+    last_error = models.TextField(blank=True)
+    processed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["created_at"]
+
+    def __str__(self):
+        return f"{self.notification_type} ({self.status})"
