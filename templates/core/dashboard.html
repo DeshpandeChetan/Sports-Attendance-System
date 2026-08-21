@@ -33,7 +33,7 @@
 <div class="row g-4">
   <div class="col-lg-7">
     <section class="panel">
-      <div class="section-title"><h2>Today</h2></div>
+      <div class="section-title"><h2>Today's Practice Sessions</h2></div>
       {% include "core/session_table.html" with sessions=today_sessions %}
       <div class="section-title mt-4"><h2>Today's Meetings</h2><a href="{% url 'meetings' %}">View all</a></div>
       {% include "core/meeting_table.html" with meetings=today_meetings meeting_details_modal_id="dashboardMeetingDetailsModal" %}

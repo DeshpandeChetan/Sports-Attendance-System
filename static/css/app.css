@@ -36,7 +36,6 @@ body {
   z-index: 1020;
 }
 
-.brand-mark,
 .avatar {
   align-items: center;
   background: var(--tertiary);
@@ -56,11 +55,30 @@ img.avatar {
 
 .navbar-brand {
   color: #ffffff;
+  min-width: 42px;
+  padding-bottom: .25rem;
+  padding-top: .25rem;
 }
 
 .navbar-brand:hover,
 .navbar-brand:focus {
   color: #ffffff;
+}
+
+.navbar-brand-logo {
+  background: #ffffff;
+  border: 2px solid rgba(127, 179, 213, .55);
+  border-radius: 50%;
+  display: block;
+  height: 42px;
+  object-fit: contain;
+  width: 42px;
+}
+
+@media (min-width: 992px) {
+  .navbar-brand {
+    margin-left: 1.75rem;
+  }
 }
 
 .nav-icon {
@@ -1677,10 +1695,6 @@ body.modal-open {
 }
 
 @media (max-width: 575.98px) {
-  .navbar-brand span:last-child {
-    display: none;
-  }
-
   .notification-dropdown {
     position: static;
   }

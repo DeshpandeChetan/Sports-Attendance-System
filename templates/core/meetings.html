@@ -10,7 +10,7 @@
 
 <section class="panel">
   <div class="section-title"><h2>Meeting List</h2><span class="small text-muted">Latest first</span></div>
-  {% include "core/meeting_table.html" with meetings=meetings meeting_details_modal_id="meetingDetailsModal" %}
+  {% include "core/meeting_table.html" with meetings=meetings meeting_details_modal_id="meetingDetailsModal" can_manage_meetings=can_schedule_meeting %}
 </section>
 
 {% if can_schedule_meeting %}
@@ -18,16 +18,17 @@
   <div class="modal-dialog modal-xl modal-dialog-centered">
     <form class="modal-content" method="post" id="meetingForm">
       {% csrf_token %}
-      <input type="hidden" name="action" value="preview">
+      <input type="hidden" name="action" value="preview" data-field="meeting-action">
+      <input type="hidden" name="meeting_id" data-field="meeting-id">
       <div class="modal-header"><h5 class="modal-title">Schedule Meeting</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
       <div class="modal-body">
         <div class="row g-3">
-          <div class="col-md-6"><label class="form-label">Meeting Title</label><input class="form-control" name="title" required></div>
-          <div class="col-md-3"><label class="form-label">Date</label><input class="form-control" type="date" name="meeting_date" required></div>
+          <div class="col-md-6"><label class="form-label">Meeting Title</label><input class="form-control" name="title" data-field="meeting-title" required></div>
+          <div class="col-md-3"><label class="form-label">Date</label><input class="form-control" type="date" name="meeting_date" data-field="meeting-date" required></div>
           <div class="col-md-3"><label class="form-label">Venue</label><select class="form-select" name="venue" data-field="meeting-venue" required><option value="" selected disabled>Select Venue</option>{% for venue in venues %}<option value="{{ venue.name }}">{{ venue.name }}</option>{% endfor %}<option value="OTHER">Other</option></select></div>
           <div class="col-md-3 d-none" data-meeting-other-venue-wrap><label class="form-label">Specific Venue</label><input class="form-control" name="other_venue" data-field="meeting-other-venue"></div>
-          <div class="col-md-3"><label class="form-label">Start Time</label><input class="form-control" type="time" name="start_time" required></div>
-          <div class="col-md-3"><label class="form-label">End Time</label><input class="form-control" type="time" name="end_time" required><div class="invalid-feedback">End Time must be after Start Time.</div></div>
+          <div class="col-md-3"><label class="form-label">Start Time</label><input class="form-control" type="time" name="start_time" data-field="meeting-start-time" required></div>
+          <div class="col-md-3"><label class="form-label">End Time</label><input class="form-control" type="time" name="end_time" data-field="meeting-end-time" required><div class="invalid-feedback">End Time must be after Start Time.</div></div>
           <div class="col-md-4">
             <label class="form-label">Sports</label>
             <div class="dropdown multi-select-dropdown">
@@ -90,10 +91,10 @@
               <p class="text-muted mb-0" data-field="team-mode-empty">Select Teams to choose participants.</p>
             </div>
           </div>
-          <div class="col-12"><label class="form-label">Agenda</label><textarea class="form-control" name="agenda" rows="4"></textarea></div>
+          <div class="col-12"><label class="form-label">Agenda</label><textarea class="form-control" name="agenda" data-field="meeting-agenda" rows="4"></textarea></div>
         </div>
       </div>
-      <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button><button class="btn btn-primary" type="submit"><i class="bi bi-calendar2-check"></i> Schedule</button></div>
+      <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button><button class="btn btn-primary" type="submit" data-field="meeting-submit"><i class="bi bi-calendar2-check"></i> Schedule</button></div>
     </form>
   </div>
 </div>
@@ -138,6 +139,19 @@
 {% if meeting_draft %}
   {{ meeting_draft|json_script:"meeting-draft-data" }}
 {% endif %}
+
+<div class="modal fade" id="meetingConfirmModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <form class="modal-content" method="post">
+      {% csrf_token %}
+      <input type="hidden" name="action" data-field="confirm-action">
+      <input type="hidden" name="meeting_id" data-field="confirm-id">
+      <div class="modal-header"><h5 class="modal-title">Confirm</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body"><p class="mb-0" data-field="confirm-message"></p></div>
+      <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button><button class="btn btn-danger" type="submit">Confirm</button></div>
+    </form>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
@@ -226,6 +240,53 @@
     syncDropdownLabel('meeting-team-check', 'meeting-teams-label', 'Select Teams');
   }
 
+  function setCheckedValues(form, field, values) {
+    const selected = new Set((values || '').split(',').filter(Boolean));
+    form.querySelectorAll(`[data-field="${field}"]`).forEach(input => input.checked = selected.has(input.value));
+  }
+
+  function resetMeetingForm(form) {
+    form.reset();
+    form.querySelector('[data-field="meeting-action"]').value = 'preview';
+    form.querySelector('[data-field="meeting-id"]').value = '';
+    form.querySelector('.modal-title').textContent = 'Schedule Meeting';
+    form.querySelector('[data-field="meeting-submit"]').innerHTML = '<i class="bi bi-calendar2-check"></i> Schedule';
+    form.querySelectorAll('[data-field="meeting-sport-check"], [data-field="meeting-team-check"], [data-field="meeting-trainer-check"]').forEach(input => input.checked = false);
+    form.querySelectorAll('[data-team-mode] input[value="LEADS"]').forEach(input => input.checked = true);
+    syncMeetingTeams();
+    syncMeetingParticipantModes();
+    toggleMeetingOtherVenue();
+    validateMeetingTimes(form);
+  }
+
+  function populateMeetingEdit(form, button) {
+    resetMeetingForm(form);
+    form.querySelector('[data-field="meeting-action"]').value = 'update';
+    form.querySelector('[data-field="meeting-id"]').value = button.dataset.id || '';
+    form.querySelector('.modal-title').textContent = 'Edit Meeting';
+    form.querySelector('[data-field="meeting-submit"]').innerHTML = '<i class="bi bi-check2-circle"></i> Save Meeting';
+    form.querySelector('[data-field="meeting-title"]').value = button.dataset.title || '';
+    form.querySelector('[data-field="meeting-date"]').value = button.dataset.date || '';
+    form.querySelector('[data-field="meeting-start-time"]').value = button.dataset.startTime || '';
+    form.querySelector('[data-field="meeting-end-time"]').value = button.dataset.endTime || '';
+    form.querySelector('[data-field="meeting-venue"]').value = button.dataset.venue || '';
+    form.querySelector('[data-field="meeting-other-venue"]').value = button.dataset.otherVenue || '';
+    form.querySelector('[data-field="meeting-agenda"]').value = button.dataset.agenda || '';
+    setCheckedValues(form, 'meeting-sport-check', button.dataset.sports);
+    syncMeetingTeams();
+    setCheckedValues(form, 'meeting-team-check', button.dataset.teams);
+    syncMeetingParticipantModes();
+    setCheckedValues(form, 'meeting-trainer-check', button.dataset.trainers);
+    (button.dataset.teamModes || '').split(',').filter(Boolean).forEach(item => {
+      const [teamId, mode] = item.split(':');
+      const input = form.querySelector(`[name="team_participants_${teamId}"][value="${mode}"]`);
+      if (input) input.checked = true;
+    });
+    toggleMeetingOtherVenue();
+    syncDropdownLabel('meeting-trainer-check', 'meeting-trainers-label', 'Select Trainers');
+    validateMeetingTimes(form);
+  }
+
   function restoreMeetingDraft() {
     const draftElement = document.getElementById('meeting-draft-data');
     if (!draftElement) return;
@@ -233,6 +294,7 @@
     const modal = document.getElementById('meetingModal');
     const form = document.getElementById('meetingForm');
     if (!modal || !form) return;
+    modal.dataset.skipReset = 'true';
     ['title', 'meeting_date', 'start_time', 'end_time', 'agenda'].forEach(name => {
       const field = form.querySelector(`[name="${name}"]`);
       if (field) field.value = draft[name] || '';
@@ -263,6 +325,28 @@
   document.querySelectorAll('[data-field="meeting-trainer-check"]').forEach(input => input.addEventListener('change', () => {
     syncDropdownLabel('meeting-trainer-check', 'meeting-trainers-label', 'Select Trainers');
   }));
+  document.getElementById('meetingModal')?.addEventListener('show.bs.modal', event => {
+    const modal = event.currentTarget;
+    const form = document.getElementById('meetingForm');
+    if (!form) return;
+    if (modal.dataset.skipReset === 'true') {
+      delete modal.dataset.skipReset;
+      return;
+    }
+    if (event.relatedTarget?.dataset.mode === 'edit') {
+      populateMeetingEdit(form, event.relatedTarget);
+    } else {
+      resetMeetingForm(form);
+    }
+  });
+  document.getElementById('meetingConfirmModal')?.addEventListener('show.bs.modal', event => {
+    const button = event.relatedTarget;
+    const modal = event.currentTarget;
+    modal.querySelector('.modal-title').textContent = button?.dataset.title || 'Confirm';
+    modal.querySelector('[data-field="confirm-action"]').value = button?.dataset.action || '';
+    modal.querySelector('[data-field="confirm-id"]').value = button?.dataset.id || '';
+    modal.querySelector('[data-field="confirm-message"]').textContent = button?.dataset.message || 'Confirm this action.';
+  });
   document.getElementById('meetingForm')?.addEventListener('submit', event => {
     if (!validateMeetingForm(event.currentTarget)) {
       event.preventDefault();

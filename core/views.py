@@ -693,6 +693,48 @@ def build_meeting_preview(post_data, organizer=None):
     }
 
 
+def meeting_display_date(value):
+    if not value:
+        return ""
+    if hasattr(value, "strftime"):
+        return value.strftime("%d/%m/%Y")
+    try:
+        return datetime.strptime(str(value), "%Y-%m-%d").strftime("%d/%m/%Y")
+    except ValueError:
+        return str(value)
+
+
+def meeting_display_time(value):
+    if not value:
+        return ""
+    if hasattr(value, "strftime"):
+        return value.strftime("%I:%M %p").lower()
+    try:
+        return datetime.strptime(str(value), "%H:%M").strftime("%I:%M %p").lower()
+    except ValueError:
+        return str(value)
+
+
+def meeting_email_details(title, meeting_date, start_time, end_time, venue, agenda, actor, actor_label="Updated By"):
+    return [
+        ("Title", title),
+        ("Date", meeting_display_date(meeting_date)),
+        ("Time", f"{meeting_display_time(start_time)} - {meeting_display_time(end_time)}"),
+        ("Venue", venue),
+        ("Agenda", agenda),
+        (actor_label, user_label(actor)),
+    ]
+
+
+def saved_meeting_schedule_tuple(meeting):
+    return (
+        meeting.meeting_date.isoformat() if meeting.meeting_date else "",
+        meeting.start_time.strftime("%H:%M") if meeting.start_time else "",
+        meeting.end_time.strftime("%H:%M") if meeting.end_time else "",
+        meeting.venue,
+    )
+
+
 def save_student_record(full_name, email, department="", class_name="", phone="", register_no="", gender="", existing_user=None):
     email = str(email or "").strip().lower()
     phone = str(phone or "").strip()
@@ -1935,6 +1977,8 @@ def meetings_list(request):
             messages.error(request, "You cannot schedule meetings.")
             return redirect("meetings")
         action = request.POST.get("action")
+        meeting_id = request.POST.get("meeting_id")
+        meeting = get_object_or_404(Meeting, pk=meeting_id) if meeting_id else None
         if action == "preview":
             built = build_meeting_preview(request.POST, organizer=request.user)
             if built["errors"]:
@@ -1989,19 +2033,111 @@ def meetings_list(request):
                     actor=request.user,
                     target_url=reverse("meetings"),
                     email_type="meeting_scheduled",
-                    email_context={"details": [
-                        ("Title", meeting.title),
-                        ("Date", preview_data.get("display_date") or data["meeting_date"]),
-                        ("Time", f"{preview_data.get('display_start_time') or data['start_time']} – {preview_data.get('display_end_time') or data['end_time']}"),
-                        ("Venue", meeting.venue),
-                        ("Agenda", meeting.agenda),
-                        ("Scheduled By", user_label(request.user)),
-                    ]},
+                    email_context={"details": meeting_email_details(
+                        meeting.title,
+                        data["meeting_date"],
+                        data["start_time"],
+                        data["end_time"],
+                        meeting.venue,
+                        meeting.agenda,
+                        request.user,
+                        actor_label="Scheduled By",
+                    )},
                 )
             request.session.pop("meeting_preview", None)
             messages.success(request, "Meeting scheduled and participants notified.")
             return redirect("meetings")
-    meetings = visible_meetings(request.user).prefetch_related("sports", "teams", "trainers", "participants").select_related("scheduled_by")
+        elif action == "update" and meeting:
+            previous_schedule = saved_meeting_schedule_tuple(meeting)
+            previous_participant_ids = set(meeting.participants.values_list("pk", flat=True))
+            built = build_meeting_preview(request.POST, organizer=request.user)
+            if built["errors"]:
+                for error in built["errors"]:
+                    messages.error(request, error)
+            else:
+                data = built["data"]
+                sports = Sport.objects.filter(pk__in=data["sport_ids"], is_active=True)
+                teams = Team.objects.filter(pk__in=data["team_ids"], is_active=True, sport__in=sports)
+                trainers = User.objects.filter(pk__in=data["trainer_ids"], is_active=True)
+                participants = User.objects.filter(pk__in=data["participant_ids"], is_active=True)
+                if not participants.exists():
+                    messages.error(request, "No valid participants found.")
+                else:
+                    with transaction.atomic():
+                        meeting.title = data["title"]
+                        meeting.meeting_date = data["meeting_date"]
+                        meeting.start_time = data["start_time"]
+                        meeting.end_time = data["end_time"]
+                        meeting.venue = data["venue"]
+                        meeting.agenda = data["agenda"]
+                        meeting.save(update_fields=["title", "meeting_date", "start_time", "end_time", "venue", "agenda", "updated_at"])
+                        meeting.sports.set(sports)
+                        meeting.teams.set(teams)
+                        meeting.trainers.set(trainers)
+                        meeting.participants.set(participants)
+                    updated_schedule = (data["meeting_date"], data["start_time"], data["end_time"], data["venue"])
+                    is_rescheduled = previous_schedule != updated_schedule
+                    notify_ids = previous_participant_ids | set(participants.values_list("pk", flat=True))
+                    create_notifications(
+                        User.objects.filter(pk__in=notify_ids, is_active=True),
+                        "Meeting rescheduled" if is_rescheduled else "Meeting updated",
+                        f"{meeting.title} {'rescheduled' if is_rescheduled else 'updated'} for {meeting_display_date(meeting.meeting_date)} from {meeting_display_time(meeting.start_time)} to {meeting_display_time(meeting.end_time)} at {meeting.venue}.",
+                        actor=request.user,
+                        target_url=reverse("meetings"),
+                        email_type="meeting_rescheduled" if is_rescheduled else "meeting_updated",
+                        email_context={"details": meeting_email_details(
+                            meeting.title,
+                            meeting.meeting_date,
+                            meeting.start_time,
+                            meeting.end_time,
+                            meeting.venue,
+                            meeting.agenda,
+                            request.user,
+                        )},
+                    )
+                    messages.success(request, "Meeting updated and participants notified.")
+                    return redirect("meetings")
+        elif action == "delete" and meeting:
+            cancelled_title = meeting.title
+            meeting_date = meeting.meeting_date
+            start_time = meeting.start_time
+            end_time = meeting.end_time
+            venue = meeting.venue
+            agenda = meeting.agenda
+            participants = list(meeting.participants.filter(is_active=True))
+            meeting.delete()
+            create_notifications(
+                participants,
+                "Meeting cancelled",
+                f"{cancelled_title} cancelled for {meeting_display_date(meeting_date)} at {venue}.",
+                actor=request.user,
+                target_url=reverse("meetings"),
+                email_type="meeting_cancelled",
+                email_context={"details": meeting_email_details(
+                    cancelled_title,
+                    meeting_date,
+                    start_time,
+                    end_time,
+                    venue,
+                    agenda,
+                    request.user,
+                    actor_label="Cancelled By",
+                )},
+            )
+            messages.success(request, "Meeting cancelled and participants notified.")
+            return redirect("meetings")
+    meetings = list(visible_meetings(request.user).prefetch_related("sports", "teams", "trainers", "participants").select_related("scheduled_by"))
+    for meeting in meetings:
+        meeting.sport_ids_csv = ",".join(str(sport.pk) for sport in meeting.sports.all())
+        meeting.team_ids_csv = ",".join(str(team.pk) for team in meeting.teams.all())
+        meeting.trainer_ids_csv = ",".join(str(trainer.pk) for trainer in meeting.trainers.all())
+        participant_ids = {participant.pk for participant in meeting.participants.all()}
+        team_modes = []
+        for team in meeting.teams.all():
+            active_member_ids = set(Membership.objects.filter(team=team, is_active=True).values_list("user_id", flat=True))
+            mode = "ALL" if active_member_ids and active_member_ids.issubset(participant_ids) else "LEADS"
+            team_modes.append(f"{team.pk}:{mode}")
+        meeting.team_modes_csv = ",".join(team_modes)
     sports = Sport.objects.filter(is_active=True).order_by("name")
     teams = Team.objects.filter(is_active=True).select_related("sport").order_by("sport__name", "gender", "name")
     venues = Venue.objects.filter(is_active=True).order_by("name")
