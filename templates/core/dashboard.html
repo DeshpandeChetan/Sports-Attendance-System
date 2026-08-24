@@ -5,7 +5,7 @@
   <div>
     <p class="eyebrow">Dashboard</p>
     <p class="dashboard-welcome">Welcome! {{ user.get_full_name|default:user.email }}</p>
-    <h1>Sports operations</h1>
+    <p class="small text-muted fw-semibold mb-0">{{ dashboard_role_title }}</p>
   </div>
   <a class="btn btn-primary" href="{% url 'sessions' %}">Schedule Practice</a>
 </div>
@@ -26,7 +26,9 @@
     <div class="metric metric-male"><i class="bi bi-check2-circle"></i><span>Completed</span><strong>{{ trainer_stats.completed }}</strong></div>
     <div class="metric metric-female"><i class="bi bi-hourglass-split"></i><span>Upcoming</span><strong>{{ trainer_stats.upcoming }}</strong></div>
   {% endif %}
-  <div class="metric metric-attendance"><i class="bi bi-clipboard-check"></i><span>Attendance</span><strong>{% if attendance_percent != None %}{{ attendance_percent }}%{% else %}No records{% endif %}</strong></div>
+  {% if not user.is_superuser and user.profile.role != 'SUPER_ADMIN' and user.profile.role != 'SUB_ADMIN' and user.profile.role != 'TRAINER' and user.profile.role != 'COORDINATOR' %}
+    <div class="metric metric-attendance"><i class="bi bi-clipboard-check"></i><span>Attendance</span><strong>{% if attendance_percent != None %}{{ attendance_percent }}%{% else %}No records{% endif %}</strong></div>
+  {% endif %}
   <div class="metric metric-feedback"><i class="bi bi-chat-left-text"></i><span>Unread Feedback</span><strong>{{ unread_feedback }}</strong></div>
 </div>
 

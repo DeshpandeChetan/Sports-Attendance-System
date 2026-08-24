@@ -36,8 +36,10 @@
     <div class="metric metric-sports mini"><i class="bi bi-trophy"></i><span>Associated Sports</span><strong>{{ associated_sports_count }}</strong></div>
     <div class="metric metric-teams mini"><i class="bi bi-diagram-3"></i><span>Associated Teams</span><strong>{{ associated_team_count }}</strong></div>
     <div class="profile-team-list">
-      {% for membership in profile_memberships %}
-        <span class="badge soft-badge">{{ membership.team.sport.name }} - {{ membership.team.get_gender_display }} {{ membership.team.name }}</span>
+      {% for association in profile_associations %}
+        <div class="profile-team-item">
+          <strong>{{ association.label }}{% if association.role %} <span>({{ association.role }})</span>{% endif %}</strong>
+        </div>
       {% empty %}
         <span class="text-muted">No sports or teams associated yet.</span>
       {% endfor %}

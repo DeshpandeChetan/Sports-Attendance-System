@@ -11,6 +11,12 @@
   {% endif %}
 </div>
 
+<div class="metric-grid admin-metric-grid">
+  <div class="metric metric-students"><i class="bi bi-people"></i><span>Total Students</span><strong>{{ student_stats.total }}</strong></div>
+  <div class="metric metric-teams"><i class="bi bi-person-check"></i><span>Active Students</span><strong>{{ student_stats.active }}</strong></div>
+  <div class="metric metric-sports"><i class="bi bi-trophy"></i><span>Sports Participation</span><strong>{{ sports|length }}</strong></div>
+</div>
+
 {% if is_admin_user %}
 <section class="panel mb-4">
   <div class="section-title"><h2>Login Requests</h2><span class="badge text-bg-light">{{ login_requests|length }} Open</span></div>
@@ -55,17 +61,19 @@
             <td>{{ row.user.profile.department|default:"-" }}</td>
             <td>{{ row.user.profile.class_name|default:"-" }}</td>
             <td>{% if row.assigned_team_labels %}{{ row.assigned_team_labels }}{% else %}<span class="text-muted">Not assigned</span>{% endif %}</td>
-            <td>{% if row.is_active %}<span class="badge text-bg-success">Active</span>{% else %}<span class="badge text-bg-secondary">Inactive</span>{% endif %}</td>
+            <td>{% if row.account_status == 'DEACTIVATED' %}<span class="badge text-bg-secondary">Deactivated</span>{% elif row.is_active %}<span class="badge text-bg-success">Active</span>{% else %}<span class="badge text-bg-secondary">Inactive</span>{% endif %}</td>
             <td class="text-end">
-              {% if can_manage_students %}
+              {% if row.is_readonly %}
+                <span class="badge text-bg-light">Read only</span>
+              {% elif can_manage_students %}
                 <div class="dropdown">
                   <button class="btn btn-sm btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown">Actions</button>
                   <ul class="dropdown-menu dropdown-menu-end">
-                    <li><button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#studentViewModal" data-name="{{ row.user.get_full_name|default:row.user.username }}" data-email="{{ row.user.email }}" data-mobile="{{ row.user.profile.phone|default:'-' }}" data-register-no="{{ row.user.profile.register_no|default:'-' }}" data-department="{{ row.user.profile.department|default:'-' }}" data-class-name="{{ row.user.profile.class_name|default:'-' }}" data-gender="{{ row.user.profile.gender|default:'-' }}" data-sport="{% if row.assigned_sport_labels %}{{ row.assigned_sport_labels }}{% else %}-{% endif %}" data-team-type="{% if row.assigned_team_type_labels %}{{ row.assigned_team_type_labels }}{% else %}-{% endif %}" data-team="{% if row.assigned_team_labels %}{{ row.assigned_team_labels }}{% else %}Not assigned{% endif %}" data-status="{{ row.is_active|yesno:'Active,Inactive' }}"><i class="bi bi-eye"></i> View</button></li>
+                    <li><button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#studentViewModal" data-name="{{ row.user.get_full_name|default:row.user.username }}" data-email="{{ row.user.email }}" data-mobile="{{ row.user.profile.phone|default:'-' }}" data-register-no="{{ row.user.profile.register_no|default:'-' }}" data-department="{{ row.user.profile.department|default:'-' }}" data-class-name="{{ row.user.profile.class_name|default:'-' }}" data-gender="{{ row.user.profile.gender|default:'-' }}" data-sport="{% if row.assigned_sport_labels %}{{ row.assigned_sport_labels }}{% else %}-{% endif %}" data-team-type="{% if row.assigned_team_type_labels %}{{ row.assigned_team_type_labels }}{% else %}-{% endif %}" data-team="{% if row.assigned_team_labels %}{{ row.assigned_team_labels }}{% else %}Not assigned{% endif %}" data-status="{% if row.account_status == 'DEACTIVATED' %}Deactivated{% elif row.is_active %}Active{% else %}Inactive{% endif %}"><i class="bi bi-eye"></i> View</button></li>
                     <li><a class="dropdown-item" href="{% url 'member_detail' row.user.pk %}"><i class="bi bi-card-list"></i> More Details</a></li>
                     <li><button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#memberModal" data-mode="edit" data-id="{% if row.membership %}{{ row.membership.pk }}{% endif %}" data-user-id="{{ row.user.pk }}" data-name="{{ row.user.get_full_name|default:row.user.username }}" data-email="{{ row.user.email }}" data-mobile="{{ row.user.profile.phone }}" data-register-no="{{ row.user.profile.register_no }}" data-department="{{ row.user.profile.department }}" data-class-name="{{ row.user.profile.class_name }}" data-gender="{{ row.user.profile.gender }}" data-sport="{% if row.team %}{{ row.team.sport_id }}{% endif %}" data-team-type="{% if row.team %}{{ row.team.team_type }}{% endif %}" data-team="{% if row.team %}{{ row.team.pk }}{% endif %}" data-assigned-sports="{{ row.assigned_sport_ids }}" data-assigned-team-types="{{ row.assigned_team_types }}" data-assigned-teams="{{ row.assigned_team_ids }}" data-active="{{ row.is_active|yesno:'true,false' }}"><i class="bi bi-pencil"></i> Edit</button></li>
-                    <li><button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#memberConfirmModal" data-action="{% if row.is_active %}deactivate{% else %}activate{% endif %}" data-id="{% if row.membership %}{{ row.membership.pk }}{% endif %}" data-user-id="{{ row.user.pk }}" data-title="{% if row.is_active %}Deactivate{% else %}Activate{% endif %} Student" data-message="Confirm this student status change."><i class="bi bi-toggle-off"></i> {% if row.is_active %}Deactivate{% else %}Activate{% endif %}</button></li>
-                    <li><button class="dropdown-item text-danger" data-bs-toggle="modal" data-bs-target="#memberConfirmModal" data-action="delete" data-id="{% if row.membership %}{{ row.membership.pk }}{% endif %}" data-user-id="{{ row.user.pk }}" data-title="Delete Student" data-message="{% if row.membership %}This removes the student from this team.{% else %}This deletes the student record.{% endif %}"><i class="bi bi-trash"></i> Delete</button></li>
+                    <li><button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#memberConfirmModal" data-action="deactivate" data-id="{% if row.membership %}{{ row.membership.pk }}{% endif %}" data-user-id="{{ row.user.pk }}" data-title="Deactivate Student" data-message="This will deactivate the student and move a copy to Deleted / Deactivated Users."><i class="bi bi-toggle-off"></i> Deactivate</button></li>
+                    <li><button class="dropdown-item text-danger" data-bs-toggle="modal" data-bs-target="#memberConfirmModal" data-action="delete" data-id="{% if row.membership %}{{ row.membership.pk }}{% endif %}" data-user-id="{{ row.user.pk }}" data-title="Delete Student" data-message="This will move the student to Deleted / Deactivated Users as Deleted."><i class="bi bi-trash"></i> Delete</button></li>
                   </ul>
                 </div>
               {% else %}-{% endif %}

@@ -19,6 +19,7 @@ SUBJECTS = {
     "meeting_scheduled": "Meeting Scheduled",
     "meeting_updated": "Meeting Updated",
     "meeting_rescheduled": "Meeting Rescheduled",
+    "meeting_completed": "Meeting Completed",
     "meeting_cancelled": "Meeting Cancelled",
     "feedback_received": "New Feedback Received",
     "captain_assigned": "Captain Assignment",

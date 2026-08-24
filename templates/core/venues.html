@@ -9,6 +9,11 @@
   </div>
 </div>
 
+<div class="metric-grid sports-summary-grid">
+  <div class="metric metric-sports"><i class="bi bi-geo-alt"></i><span>Total Venues</span><strong>{{ venue_count }}</strong></div>
+  <div class="metric metric-teams"><i class="bi bi-check2-circle"></i><span>Active Venues</span><strong>{{ active_venue_count }}</strong></div>
+</div>
+
 <section class="panel">
   <div class="section-title"><h2>Venue List</h2><span class="small text-muted">Practice locations</span></div>
   <div class="table-responsive">
@@ -24,7 +29,7 @@
               <div class="dropdown">
                 <button class="btn btn-sm btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown">Actions</button>
                 <ul class="dropdown-menu dropdown-menu-end">
-                  <li><button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#venueViewModal" data-name="{{ venue.name }}" data-location="{{ venue.location|default:'-' }}" data-status="{{ venue.is_active|yesno:'Active,Inactive' }}"><i class="bi bi-eye"></i> View</button></li>
+                  <li><button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#venueViewModal" data-name="{{ venue.name }}" data-location="{{ venue.location|default:'-' }}" data-status="{{ venue.is_active|yesno:'Active,Inactive' }}" data-sessions="{{ venue.session_count }}" data-completed="{{ venue.completed_session_count }}"><i class="bi bi-eye"></i> View</button></li>
                   <li><button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#venueModal" data-mode="edit" data-id="{{ venue.pk }}" data-name="{{ venue.name }}" data-location="{{ venue.location }}" data-active="{{ venue.is_active|yesno:'true,false' }}"><i class="bi bi-pencil"></i> Edit</button></li>
                   <li><button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#venueConfirmModal" data-action="{% if venue.is_active %}deactivate{% else %}activate{% endif %}" data-id="{{ venue.pk }}" data-title="{% if venue.is_active %}Deactivate{% else %}Activate{% endif %} Venue" data-message="Confirm this venue status change."><i class="bi bi-toggle-off"></i> {% if venue.is_active %}Deactivate{% else %}Activate{% endif %}</button></li>
                   <li><button class="dropdown-item text-danger" data-bs-toggle="modal" data-bs-target="#venueConfirmModal" data-action="delete" data-id="{{ venue.pk }}" data-title="Delete Venue" data-message="This permanently deletes this venue."><i class="bi bi-trash"></i> Delete</button></li>
@@ -66,6 +71,8 @@
       <div class="modal-body detail-list">
         <div><span>Name</span><strong data-field="view-name"></strong></div>
         <div><span>Location</span><strong data-field="view-location"></strong></div>
+        <div><span>Total Sessions Scheduled</span><strong data-field="view-sessions"></strong></div>
+        <div><span>Completed Sessions (Attendance Marked)</span><strong data-field="view-completed"></strong></div>
         <div><span>Status</span><strong data-field="view-status"></strong></div>
       </div>
       <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button></div>
@@ -105,7 +112,7 @@
   document.getElementById('venueViewModal')?.addEventListener('show.bs.modal', event => {
     const b = event.relatedTarget;
     const modal = event.currentTarget;
-    ['name','location','status'].forEach(key => {
+    ['name','location','sessions','completed','status'].forEach(key => {
       const field = modal.querySelector(`[data-field="view-${key}"]`);
       if (field) field.textContent = b?.dataset[key] || '-';
     });

@@ -13,7 +13,9 @@
         <a class="{% if request.resolver_match.url_name == 'teams' %}active{% endif %}" href="{% url 'teams' %}"><i class="bi bi-trophy"></i><span>My Sports</span></a>
         <a class="{% if request.resolver_match.url_name == 'meetings' %}active{% endif %}" href="{% url 'meetings' %}"><i class="bi bi-calendar2-check"></i><span>Meetings</span></a>
       {% endif %}
-      <a class="{% if request.resolver_match.url_name == 'my_attendance' %}active{% endif %}" href="{% url 'my_attendance' %}"><i class="bi bi-clipboard-check"></i><span>My Attendance</span></a>
+      {% if not user.is_superuser and user.profile.role != 'SUPER_ADMIN' and user.profile.role != 'SUB_ADMIN' and user.profile.role != 'TRAINER' and user.profile.role != 'COORDINATOR' %}
+        <a class="{% if request.resolver_match.url_name == 'my_attendance' %}active{% endif %}" href="{% url 'my_attendance' %}"><i class="bi bi-clipboard-check"></i><span>My Attendance</span></a>
+      {% endif %}
       <a class="{% if request.resolver_match.url_name == 'feedback' %}active{% endif %}" href="{% url 'feedback' %}"><i class="bi bi-chat-left-text"></i><span>Feedback</span></a>
       {% if not user.is_superuser and user.profile.role != 'SUPER_ADMIN' and user.profile.role != 'SUB_ADMIN' %}
         <a class="{% if request.resolver_match.url_name == 'settings' or request.resolver_match.url_name == 'notifications' %}active{% endif %}" href="{% url 'settings' %}"><i class="bi bi-gear"></i><span>Settings</span></a>

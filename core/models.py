@@ -13,6 +13,11 @@ class TimeStampedModel(models.Model):
 
 
 class UserProfile(TimeStampedModel):
+    class AccountStatus(models.TextChoices):
+        ACTIVE = "ACTIVE", "Active"
+        DEACTIVATED = "DEACTIVATED", "Deactivated"
+        DELETED = "DELETED", "Deleted"
+
     class Role(models.TextChoices):
         SUPER_ADMIN = "SUPER_ADMIN", "Super Admin"
         SUB_ADMIN = "SUB_ADMIN", "Coordinator"
@@ -32,6 +37,7 @@ class UserProfile(TimeStampedModel):
     register_no = models.CharField(max_length=60, blank=True)
     gender = models.CharField(max_length=30, blank=True)
     profile_image = models.ImageField(upload_to="profile_images/", blank=True, null=True)
+    account_status = models.CharField(max_length=20, choices=AccountStatus.choices, default=AccountStatus.ACTIVE)
 
     def __str__(self):
         return f"{self.user.get_full_name() or self.user.username} ({self.get_role_display()})"
@@ -120,6 +126,10 @@ class Membership(TimeStampedModel):
 
 
 class Session(TimeStampedModel):
+    class Status(models.TextChoices):
+        SCHEDULED = "SCHEDULED", "Scheduled"
+        CANCELLED = "CANCELLED", "Cancelled"
+
     class ScheduleSlot(models.TextChoices):
         MORNING = "MORNING", "Morning"
         EVENING = "EVENING", "Evening"
@@ -140,6 +150,7 @@ class Session(TimeStampedModel):
     attendance_started_by_role = models.CharField(max_length=40, blank=True)
     attendance_started_at = models.DateTimeField(null=True, blank=True)
     attendance_lock_expires_at = models.DateTimeField(null=True, blank=True)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.SCHEDULED)
 
     class Meta:
         ordering = ["-start_at"]
@@ -212,6 +223,11 @@ class AttendanceEditLog(TimeStampedModel):
 
 
 class Meeting(TimeStampedModel):
+    class Status(models.TextChoices):
+        SCHEDULED = "SCHEDULED", "Scheduled"
+        COMPLETED = "COMPLETED", "Completed"
+        CANCELLED = "CANCELLED", "Cancelled"
+
     title = models.CharField(max_length=160)
     meeting_date = models.DateField()
     start_time = models.TimeField()
@@ -223,6 +239,8 @@ class Meeting(TimeStampedModel):
     trainers = models.ManyToManyField(settings.AUTH_USER_MODEL, related_name="trainer_meetings", blank=True)
     participants = models.ManyToManyField(settings.AUTH_USER_MODEL, related_name="meetings", blank=True)
     scheduled_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name="meetings_scheduled")
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.SCHEDULED)
+    ending_note = models.TextField(blank=True)
 
     class Meta:
         ordering = ["-meeting_date", "-start_time"]

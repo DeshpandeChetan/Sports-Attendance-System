@@ -22,6 +22,8 @@
       <a class="navbar-brand d-flex align-items-center" href="{% url 'dashboard' %}" aria-label="Christ University Sports Dashboard">
         <img class="navbar-brand-logo" src="{% static 'img/christ_img.jpeg' %}" alt="CHRIST University">
       </a>
+        <span class="brand-mark text-light">Sports Attendance System</span>
+
       {% if user.is_authenticated %}
         <div class="ms-auto d-flex align-items-center gap-2">
           <div class="dropdown notification-dropdown">
@@ -89,7 +91,9 @@
               <li><span class="dropdown-item-text small text-muted">{{ topbar_role_label }}</span></li>
               <li><hr class="dropdown-divider"></li>
               <li><a class="dropdown-item" href="{% url 'my_profile' %}">My Profile</a></li>
-              <li><a class="dropdown-item" href="{% url 'my_attendance' %}">My Attendance</a></li>
+              {% if not user.is_superuser and user.profile.role != 'SUPER_ADMIN' and user.profile.role != 'SUB_ADMIN' and user.profile.role != 'TRAINER' and user.profile.role != 'COORDINATOR' %}
+                <li><a class="dropdown-item" href="{% url 'my_attendance' %}">My Attendance</a></li>
+              {% endif %}
               <li><button class="dropdown-item" type="button" data-bs-toggle="modal" data-bs-target="#logoutConfirmModal">Logout</button></li>
             </ul>
           </div>
@@ -143,7 +147,9 @@
     <nav class="mobile-bottom-nav d-lg-none">
       <a href="{% url 'dashboard' %}"><i class="bi bi-house"></i><span>Home</span></a>
       <a href="{% url 'sessions' %}"><i class="bi bi-calendar-event"></i><span>Calendar</span></a>
-      <a href="{% url 'my_attendance' %}"><i class="bi bi-clipboard-check"></i><span>Attendance</span></a>
+      {% if not user.is_superuser and user.profile.role != 'SUPER_ADMIN' and user.profile.role != 'SUB_ADMIN' and user.profile.role != 'TRAINER' and user.profile.role != 'COORDINATOR' %}
+        <a href="{% url 'my_attendance' %}"><i class="bi bi-clipboard-check"></i><span>Attendance</span></a>
+      {% endif %}
       <a href="{% url 'feedback' %}"><i class="bi bi-chat-left-text"></i><span>Feedback</span></a>
       {% if user.is_superuser or user.profile.role == 'SUPER_ADMIN' or user.profile.role == 'SUB_ADMIN' %}
         <a href="{% url 'sports' %}"><i class="bi bi-grid"></i><span>More</span></a>

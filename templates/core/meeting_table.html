@@ -1,6 +1,6 @@
 <div class="table-responsive">
   <table class="table align-middle data-table">
-    <thead><tr><th>Meeting</th><th>Date</th><th>Time</th><th>Venue</th><th>Teams</th><th>Scheduled By</th><th class="text-end">Actions</th></tr></thead>
+    <thead><tr><th>Meeting</th><th>Date</th><th>Time</th><th>Venue</th><th>Teams</th><th>Status</th><th>Scheduled By</th><th class="text-end">Actions</th></tr></thead>
     <tbody>
       {% for meeting in meetings %}
         <tr>
@@ -9,22 +9,34 @@
           <td>{{ meeting.start_time|time:"h:i A" }} - {{ meeting.end_time|time:"h:i A" }}</td>
           <td>{{ meeting.venue }}</td>
           <td>{% for team in meeting.teams.all %}{{ team }}{% if not forloop.last %}; {% endif %}{% empty %}-{% endfor %}</td>
+          <td>
+            {% if meeting.status == 'COMPLETED' %}
+              <span class="badge text-bg-success">Completed</span>
+            {% elif meeting.status == 'CANCELLED' %}
+              <span class="badge text-bg-danger">Cancelled</span>
+            {% else %}
+              <span class="badge text-bg-warning">Upcoming</span>
+            {% endif %}
+          </td>
           <td>{{ meeting.scheduled_by|default:"-" }}</td>
           <td class="text-end">
             <div class="dropdown">
               <button class="btn btn-sm btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown">Actions</button>
               <ul class="dropdown-menu dropdown-menu-end">
-                <li><button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#{{ meeting_details_modal_id|default:'meetingDetailsModal' }}" data-title="{{ meeting.title }}" data-date="{{ meeting.meeting_date|date:'d/m/Y' }}" data-time="{{ meeting.start_time|time:'h:i A' }} - {{ meeting.end_time|time:'h:i A' }}" data-venue="{{ meeting.venue }}" data-agenda="{{ meeting.agenda|default:'-' }}" data-sports="{% for sport in meeting.sports.all %}{{ sport.name }}{% if not forloop.last %}, {% endif %}{% empty %}-{% endfor %}" data-teams="{% for team in meeting.teams.all %}{{ team }}{% if not forloop.last %}; {% endif %}{% empty %}-{% endfor %}" data-trainers="{% for trainer in meeting.trainers.all %}{{ trainer.get_full_name|default:trainer.email }}{% if not forloop.last %}, {% endif %}{% empty %}-{% endfor %}" data-participants="{% for participant in meeting.participants.all %}{{ participant.get_full_name|default:participant.email }}{% if not forloop.last %}; {% endif %}{% empty %}-{% endfor %}" data-scheduled-by="{{ meeting.scheduled_by|default:'-' }}"><i class="bi bi-eye"></i> Show Details</button></li>
+                <li><button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#{{ meeting_details_modal_id|default:'meetingDetailsModal' }}" data-title="{{ meeting.title }}" data-date="{{ meeting.meeting_date|date:'d/m/Y' }}" data-time="{{ meeting.start_time|time:'h:i A' }} - {{ meeting.end_time|time:'h:i A' }}" data-venue="{{ meeting.venue }}" data-status="{{ meeting.get_status_display }}" data-ending-note="{{ meeting.ending_note|default:'-' }}" data-agenda="{{ meeting.agenda|default:'-' }}" data-sports="{% for sport in meeting.sports.all %}{{ sport.name }}{% if not forloop.last %}, {% endif %}{% empty %}-{% endfor %}" data-teams="{% for team in meeting.teams.all %}{{ team }}{% if not forloop.last %}; {% endif %}{% empty %}-{% endfor %}" data-trainers="{% for trainer in meeting.trainers.all %}{{ trainer.get_full_name|default:trainer.email }}{% if not forloop.last %}, {% endif %}{% empty %}-{% endfor %}" data-participants="{% for participant in meeting.participants.all %}{{ participant.get_full_name|default:participant.email }}{% if not forloop.last %}; {% endif %}{% empty %}-{% endfor %}" data-scheduled-by="{{ meeting.scheduled_by|default:'-' }}"><i class="bi bi-eye"></i> Show Details</button></li>
                 {% if can_manage_meetings %}
-                  <li><button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#meetingModal" data-mode="edit" data-id="{{ meeting.pk }}" data-title="{{ meeting.title }}" data-date="{{ meeting.meeting_date|date:'Y-m-d' }}" data-start-time="{{ meeting.start_time|time:'H:i' }}" data-end-time="{{ meeting.end_time|time:'H:i' }}" data-venue="{% if meeting.venue|slice:':8' == 'Other - ' %}OTHER{% else %}{{ meeting.venue }}{% endif %}" data-other-venue="{% if meeting.venue|slice:':8' == 'Other - ' %}{{ meeting.venue|slice:'8:' }}{% endif %}" data-agenda="{{ meeting.agenda }}" data-sports="{{ meeting.sport_ids_csv }}" data-teams="{{ meeting.team_ids_csv }}" data-trainers="{{ meeting.trainer_ids_csv }}" data-team-modes="{{ meeting.team_modes_csv }}"><i class="bi bi-pencil"></i> Edit</button></li>
-                  <li><button class="dropdown-item text-danger" data-bs-toggle="modal" data-bs-target="#meetingConfirmModal" data-action="delete" data-id="{{ meeting.pk }}" data-title="Cancel Meeting" data-message="This will cancel the meeting and notify all selected participants."><i class="bi bi-trash"></i> Delete / Cancel</button></li>
+                  {% if meeting.status != 'CANCELLED' and meeting.status != 'COMPLETED' %}
+                    <li><button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#meetingModal" data-mode="edit" data-id="{{ meeting.pk }}" data-title="{{ meeting.title }}" data-date="{{ meeting.meeting_date|date:'Y-m-d' }}" data-start-time="{{ meeting.start_time|time:'H:i' }}" data-end-time="{{ meeting.end_time|time:'H:i' }}" data-venue="{% if meeting.venue|slice:':8' == 'Other - ' %}OTHER{% else %}{{ meeting.venue }}{% endif %}" data-other-venue="{% if meeting.venue|slice:':8' == 'Other - ' %}{{ meeting.venue|slice:'8:' }}{% endif %}" data-agenda="{{ meeting.agenda }}" data-sports="{{ meeting.sport_ids_csv }}" data-teams="{{ meeting.team_ids_csv }}" data-trainers="{{ meeting.trainer_ids_csv }}" data-team-modes="{{ meeting.team_modes_csv }}"><i class="bi bi-pencil"></i> Edit</button></li>
+                    <li><button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#meetingConfirmModal" data-action="mark_completed" data-id="{{ meeting.pk }}" data-title="Mark Meeting as Completed" data-message="This will mark the meeting as completed and notify selected participants." data-note-label="Ending Note"><i class="bi bi-check2-circle"></i> Mark as Completed</button></li>
+                    <li><button class="dropdown-item text-danger" data-bs-toggle="modal" data-bs-target="#meetingConfirmModal" data-action="cancel" data-id="{{ meeting.pk }}" data-title="Cancel Meeting" data-message="This will cancel the meeting and notify all selected participants." data-note-label="Cancellation Note"><i class="bi bi-x-circle"></i> Cancel Meeting</button></li>
+                  {% endif %}
                 {% endif %}
               </ul>
             </div>
           </td>
         </tr>
       {% empty %}
-        <tr><td colspan="7" class="empty-state">No meetings found.</td></tr>
+        <tr><td colspan="8" class="empty-state">No meetings found.</td></tr>
       {% endfor %}
     </tbody>
   </table>
@@ -39,6 +51,8 @@
         <div><span>Date</span><strong data-field="detail-date"></strong></div>
         <div><span>Time</span><strong data-field="detail-time"></strong></div>
         <div><span>Venue</span><strong data-field="detail-venue"></strong></div>
+        <div><span>Status</span><strong data-field="detail-status"></strong></div>
+        <div><span>Ending Note</span><strong data-field="detail-ending-note"></strong></div>
         <div><span>Agenda</span><strong data-field="detail-agenda"></strong></div>
         <div><span>Sports</span><strong data-field="detail-sports"></strong></div>
         <div><span>Teams</span><strong data-field="detail-teams"></strong></div>
@@ -57,7 +71,7 @@
     if (!modal) return;
     modal.addEventListener('show.bs.modal', event => {
       const button = event.relatedTarget;
-      ['title', 'date', 'time', 'venue', 'agenda', 'sports', 'teams', 'trainers', 'participants', 'scheduledBy'].forEach(key => {
+      ['title', 'date', 'time', 'venue', 'status', 'endingNote', 'agenda', 'sports', 'teams', 'trainers', 'participants', 'scheduledBy'].forEach(key => {
         const field = modal.querySelector(`[data-field="detail-${key.replace(/[A-Z]/g, m => '-' + m.toLowerCase())}"]`);
         if (field) field.textContent = button?.dataset[key] || '-';
       });

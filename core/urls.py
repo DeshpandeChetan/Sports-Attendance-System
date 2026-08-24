@@ -20,6 +20,7 @@ urlpatterns = [
     path("settings/", views.settings_page, name="settings"),
     path("settings/deactivated-users/", views.deactivated_users, name="deactivated_users"),
     path("settings/users/<int:pk>/restore/", views.restore_user, name="restore_user"),
+    path("settings/users/<int:pk>/permanent-delete/", views.permanent_delete_user, name="permanent_delete_user"),
     path("my-profile/", views.my_profile, name="my_profile"),
     path("notifications/", views.notifications_list, name="notifications"),
     path("notifications/mark-read/", views.mark_notifications_read, name="mark_notifications_read"),

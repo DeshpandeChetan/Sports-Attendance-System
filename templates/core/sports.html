@@ -17,6 +17,11 @@
   </div>
 </div>
 
+<div class="metric-grid sports-summary-grid">
+  <div class="metric metric-sports"><i class="bi bi-trophy"></i><span>Total Sports</span><strong>{{ sport_count }}</strong></div>
+  <div class="metric metric-trainers"><i class="bi bi-person-workspace"></i><span>Total Trainers</span><strong>{{ trainer_count }}</strong></div>
+</div>
+
 <section class="panel">
   <div class="section-title">
     <h2>Sport List</h2>
@@ -24,18 +29,24 @@
   </div>
   <div class="table-responsive">
     <table class="table align-middle data-table">
-      <thead><tr><th>Sport</th><th>Teams</th><th>Status</th><th class="text-end">Actions</th></tr></thead>
+      <thead><tr><th>Sport</th><th>Teams</th><th>Players</th><th>Status</th><th class="text-end">Actions</th></tr></thead>
       <tbody>
         {% for sport in sports %}
           <tr>
-            <td data-filter-value="{{ sport.name }}"><strong>{{ sport.name }}</strong><div class="text-muted small">{{ sport.description|default:"No description"|truncatewords:14 }}</div></td>
+            <td data-filter-value="{{ sport.name }}">
+              <div class="sport-name-cell">
+                <span class="sport-icon"><i class="bi {{ sport.icon_class }}"></i></span>
+                <span><strong>{{ sport.name }}</strong><div class="text-muted small">{{ sport.description|default:"No description"|truncatewords:14 }}</div></span>
+              </div>
+            </td>
             <td>{{ sport.team_count }}</td>
+            <td>{{ sport.player_count }}</td>
             <td>{% if sport.is_active %}<span class="badge text-bg-success">Active</span>{% else %}<span class="badge text-bg-secondary">Inactive</span>{% endif %}</td>
             <td class="text-end">
               <div class="dropdown">
                 <button class="btn btn-sm btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown">Actions</button>
                 <ul class="dropdown-menu dropdown-menu-end">
-                  <li><button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#sportViewModal" data-name="{{ sport.name }}" data-description="{{ sport.description|default:'No description' }}" data-teams="{{ sport.team_count }}" data-status="{{ sport.is_active|yesno:'Active,Inactive' }}"><i class="bi bi-eye"></i> View</button></li>
+                  <li><button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#sportViewModal" data-name="{{ sport.name }}" data-description="{{ sport.description|default:'No description' }}" data-teams="{{ sport.team_count }}" data-players="{{ sport.player_count }}" data-sessions="{{ sport.marked_session_count }}" data-status="{{ sport.is_active|yesno:'Active,Inactive' }}"><i class="bi bi-eye"></i> View</button></li>
                   <li><button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#sportModal" data-mode="edit" data-id="{{ sport.pk }}" data-name="{{ sport.name }}" data-description="{{ sport.description }}" data-active="{{ sport.is_active|yesno:'true,false' }}"><i class="bi bi-pencil"></i> Edit</button></li>
                   <li><button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#confirmModal" data-action="{% if sport.is_active %}deactivate{% else %}activate{% endif %}" data-id="{{ sport.pk }}" data-title="{% if sport.is_active %}Deactivate{% else %}Activate{% endif %} {{ sport.name }}" data-message="This will {% if sport.is_active %}hide this sport from active selection{% else %}make this sport active again{% endif %}."><i class="bi bi-toggle-off"></i> {% if sport.is_active %}Deactivate{% else %}Activate{% endif %}</button></li>
                   <li><button class="dropdown-item text-danger" data-bs-toggle="modal" data-bs-target="#confirmModal" data-action="delete" data-id="{{ sport.pk }}" data-title="Delete {{ sport.name }}" data-message="This permanently deletes the sport and related records if the database allows it."><i class="bi bi-trash"></i> Delete</button></li>
@@ -44,7 +55,7 @@
             </td>
           </tr>
         {% empty %}
-          <tr><td colspan="4" class="empty-state">No sports created yet. Use Add Sport to create the first one.</td></tr>
+          <tr><td colspan="5" class="empty-state">No sports created yet. Use Add Sport to create the first one.</td></tr>
         {% endfor %}
       </tbody>
     </table>
@@ -91,6 +102,8 @@
         <div><span>Sport</span><strong data-field="view-name"></strong></div>
         <div><span>Description</span><strong data-field="view-description"></strong></div>
         <div><span>Teams</span><strong data-field="view-teams"></strong></div>
+        <div><span>Total Players</span><strong data-field="view-players"></strong></div>
+        <div><span>Total Practice Sessions (Attendance Marked)</span><strong data-field="view-sessions"></strong></div>
         <div><span>Status</span><strong data-field="view-status"></strong></div>
       </div>
       <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button></div>
@@ -144,7 +157,7 @@
   document.getElementById('sportViewModal').addEventListener('show.bs.modal', event => {
     const button = event.relatedTarget;
     const modal = event.currentTarget;
-    ['name','description','teams','status'].forEach(key => {
+    ['name','description','teams','players','sessions','status'].forEach(key => {
       modal.querySelector(`[data-field="view-${key}"]`).textContent = button.dataset[key] || '-';
     });
   });

@@ -199,10 +199,24 @@ img.avatar {
   background: rgba(231, 235, 241, .58);
   border: 1px solid rgba(0, 51, 102, .12);
   border-radius: 1rem;
-  display: flex;
-  flex-wrap: wrap;
-  gap: .5rem;
+  display: grid;
+  gap: .55rem;
   padding: 1rem;
+}
+
+.profile-team-item {
+  color: var(--ink);
+}
+
+.profile-team-item strong {
+  font-size: .94rem;
+  font-weight: 700;
+}
+
+.profile-team-item strong span {
+  color: var(--secondary);
+  font-size: .88rem;
+  font-weight: 800;
 }
 
 .student-detail-head {
@@ -624,6 +638,14 @@ img.avatar {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+.sports-summary-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.view-stat-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .metric span {
   color: var(--neutral);
   display: block;
@@ -637,6 +659,12 @@ img.avatar {
   display: block;
   font-size: 1.5rem;
   margin-top: .25rem;
+}
+
+.metric strong.metric-inline-list {
+  font-size: .9rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .metric.mini {
@@ -656,6 +684,37 @@ img.avatar {
   font-weight: 800;
   margin: 0;
   color: var(--primary);
+}
+
+.sport-name-cell {
+  align-items: center;
+  display: flex;
+  gap: .75rem;
+}
+
+.sport-icon {
+  align-items: center;
+  background: #cfe2ff;
+  border-radius: .75rem;
+  color: var(--secondary);
+  display: inline-flex;
+  flex: 0 0 38px;
+  height: 38px;
+  justify-content: center;
+  width: 38px;
+}
+
+.sport-icon-sm {
+  border-radius: .6rem;
+  flex-basis: 32px;
+  height: 32px;
+  width: 32px;
+}
+
+.sport-session-badge {
+  align-items: center;
+  display: inline-flex;
+  gap: .35rem;
 }
 
 .text-muted {

@@ -17,27 +17,36 @@
   </div>
 </div>
 
+<div class="metric-grid admin-metric-grid">
+  <div class="metric metric-trainers"><i class="bi bi-person-workspace"></i><span>Total Trainers</span><strong>{{ trainer_stats.total }}</strong></div>
+  <div class="metric metric-teams"><i class="bi bi-person-check"></i><span>Active Trainers</span><strong>{{ trainer_stats.active }}</strong></div>
+  <div class="metric metric-sports"><i class="bi bi-trophy"></i><span>Assigned Sports</span><strong>{{ trainer_stats.assigned_sports }}</strong></div>
+</div>
+
 <section class="panel">
   <div class="section-title"><h2>Trainer List</h2><span class="small text-muted">Assigned coaching staff</span></div>
   <div class="table-responsive">
     <table class="table align-middle data-table">
-      <thead><tr><th>Trainer</th><th data-filter="false">Email</th><th data-filter="false">Mobile</th><th data-filter="false">Reg No</th><th>Assigned Sports / Teams</th><th>Status</th><th class="text-end">Actions</th></tr></thead>
+      <thead><tr><th data-filter="false">Trainer</th><th data-filter="false">Reg No</th><th data-filter="false">Assigned Sports</th><th>Status</th><th class="text-end">Actions</th></tr></thead>
       <tbody>
         {% for trainer in trainers %}
           <tr>
             <td><strong>{{ trainer.get_full_name|default:trainer.username }}</strong></td>
-            <td>{{ trainer.email }}</td>
-            <td>{{ trainer.profile.phone|default:"-" }}</td>
             <td>{{ trainer.profile.register_no|default:"-" }}</td>
             <td>
-              {% for team in trainer.coordinated_teams.all %}
-                <span class="badge soft-badge me-1 mb-1">{{ team.sport.name }} - {{ team.get_gender_display }} {{ team.name }}</span>
-              {% empty %}
-                <span class="text-muted">No teams assigned</span>
-              {% endfor %}
+              {% if trainer.assigned_sport_names %}
+                {% for sport_name in trainer.assigned_sport_names %}
+                  <span class="badge soft-badge me-1 mb-1">{{ sport_name }}</span>
+                {% endfor %}
+              {% else %}
+                <span class="text-muted">{{ trainer.assigned_sports_label }}</span>
+              {% endif %}
             </td>
-            <td>{% if trainer.profile.role == 'TRAINER' or trainer.profile.role == 'COORDINATOR' %}<span class="badge text-bg-success">Active</span>{% else %}<span class="badge text-bg-secondary">Inactive</span>{% endif %}</td>
+            <td>{% if trainer.account_status == 'DEACTIVATED' %}<span class="badge text-bg-secondary">Deactivated</span>{% elif trainer.profile.role == 'TRAINER' or trainer.profile.role == 'COORDINATOR' %}<span class="badge text-bg-success">Active</span>{% else %}<span class="badge text-bg-secondary">Inactive</span>{% endif %}</td>
             <td class="text-end">
+              {% if trainer.is_readonly %}
+                <span class="badge text-bg-light">Read only</span>
+              {% else %}
               <div class="dropdown">
                 <button class="btn btn-sm btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown">Actions</button>
                 <ul class="dropdown-menu dropdown-menu-end">
@@ -50,8 +59,12 @@
                       data-email="{{ trainer.email }}"
                       data-mobile="{{ trainer.profile.phone|default:'-' }}"
                       data-register-no="{{ trainer.profile.register_no|default:'-' }}"
-                      data-status="{% if trainer.profile.role == 'TRAINER' or trainer.profile.role == 'COORDINATOR' %}Active{% else %}Inactive{% endif %}"
-                      data-teams="{% for team in trainer.coordinated_teams.all %}{{ team.sport.name }} - {{ team.get_gender_display }} {{ team.name }}{% if not forloop.last %}, {% endif %}{% empty %}No teams assigned{% endfor %}">
+                      data-status="{% if trainer.account_status == 'DEACTIVATED' %}Deactivated{% elif trainer.profile.role == 'TRAINER' or trainer.profile.role == 'COORDINATOR' %}Active{% else %}Inactive{% endif %}"
+                      data-sports="{{ trainer.assigned_sports_label }}"
+                      data-assigned-sessions="{{ trainer.assigned_session_count }}"
+                      data-marked-sessions="{{ trainer.marked_session_count }}"
+                      data-feedback-received="{{ trainer.feedback_received_count }}"
+                      data-feedback-submitted="{{ trainer.feedback_submitted_count }}">
                       <i class="bi bi-eye"></i> View
                     </button>
                   </li>
@@ -70,14 +83,15 @@
                       <i class="bi bi-pencil"></i> Edit
                     </button>
                   </li>
-                  <li><button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#trainerConfirmModal" data-action="{% if trainer.profile.role == 'TRAINER' or trainer.profile.role == 'COORDINATOR' %}deactivate{% else %}activate{% endif %}" data-id="{{ trainer.pk }}" data-title="{% if trainer.profile.role == 'TRAINER' or trainer.profile.role == 'COORDINATOR' %}Deactivate{% else %}Activate{% endif %} Trainer" data-message="Confirm this trainer status change."><i class="bi bi-toggle-off"></i> {% if trainer.profile.role == 'TRAINER' or trainer.profile.role == 'COORDINATOR' %}Deactivate{% else %}Activate{% endif %}</button></li>
-                  <li><button class="dropdown-item text-danger" data-bs-toggle="modal" data-bs-target="#trainerConfirmModal" data-action="delete" data-id="{{ trainer.pk }}" data-title="Delete Trainer" data-message="This permanently deletes the trainer if the database allows it."><i class="bi bi-trash"></i> Delete</button></li>
+                  <li><button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#trainerConfirmModal" data-action="deactivate" data-id="{{ trainer.pk }}" data-title="Deactivate Trainer" data-message="This will deactivate the trainer and move a copy to Deleted / Deactivated Users."><i class="bi bi-toggle-off"></i> Deactivate</button></li>
+                  <li><button class="dropdown-item text-danger" data-bs-toggle="modal" data-bs-target="#trainerConfirmModal" data-action="delete" data-id="{{ trainer.pk }}" data-title="Delete Trainer" data-message="This will move the trainer to Deleted / Deactivated Users as Deleted."><i class="bi bi-trash"></i> Delete</button></li>
                 </ul>
               </div>
+              {% endif %}
             </td>
           </tr>
         {% empty %}
-          <tr><td colspan="7" class="empty-state">No trainers added yet.</td></tr>
+          <tr><td colspan="5" class="empty-state">No trainers added yet.</td></tr>
         {% endfor %}
       </tbody>
     </table>
@@ -121,13 +135,21 @@
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
       <div class="modal-header"><h5 class="modal-title">Trainer Details</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-      <div class="modal-body detail-list">
-        <div><span>Name</span><strong data-field="view-name"></strong></div>
-        <div><span>Email</span><strong data-field="view-email"></strong></div>
-        <div><span>Mobile</span><strong data-field="view-mobile"></strong></div>
-        <div><span>Reg No</span><strong data-field="view-register-no"></strong></div>
-        <div><span>Status</span><strong data-field="view-status"></strong></div>
-        <div><span>Assigned Teams</span><strong data-field="view-teams"></strong></div>
+      <div class="modal-body">
+        <div class="metric-grid view-stat-grid mb-3">
+          <div class="metric metric-sports mini"><i class="bi bi-calendar-event"></i><span>Practice Sessions</span><strong data-field="view-assigned-sessions"></strong></div>
+          <div class="metric metric-attendance mini"><i class="bi bi-clipboard-check"></i><span>Attendance Marked</span><strong data-field="view-marked-sessions"></strong></div>
+          <div class="metric metric-feedback mini"><i class="bi bi-chat-left-text"></i><span>Feedback Received</span><strong data-field="view-feedback-received"></strong></div>
+          <div class="metric metric-teams mini"><i class="bi bi-send"></i><span>Feedback Submitted</span><strong data-field="view-feedback-submitted"></strong></div>
+        </div>
+        <div class="detail-list">
+          <div><span>Name</span><strong data-field="view-name"></strong></div>
+          <div><span>Email</span><strong data-field="view-email"></strong></div>
+          <div><span>Mobile</span><strong data-field="view-mobile"></strong></div>
+          <div><span>Reg No</span><strong data-field="view-register-no"></strong></div>
+          <div><span>Status</span><strong data-field="view-status"></strong></div>
+          <div><span>Assigned Sports</span><strong data-field="view-sports"></strong></div>
+        </div>
       </div>
       <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button></div>
     </div>
@@ -195,7 +217,7 @@
   document.getElementById('trainerViewModal')?.addEventListener('show.bs.modal', event => {
     const b = event.relatedTarget;
     const modal = event.currentTarget;
-    ['name', 'email', 'mobile', 'registerNo', 'status', 'teams'].forEach(key => {
+    ['name', 'email', 'mobile', 'registerNo', 'status', 'sports', 'assignedSessions', 'markedSessions', 'feedbackReceived', 'feedbackSubmitted'].forEach(key => {
       const field = modal.querySelector(`[data-field="view-${key}"]`);
       if (field) field.textContent = b?.dataset[key] || '-';
     });

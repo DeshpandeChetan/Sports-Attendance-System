@@ -40,6 +40,8 @@ def can_schedule_session(user, team):
 
 
 def can_take_attendance(user, session):
+    if getattr(session, "status", "") == "CANCELLED":
+        return False
     if is_admin_user(user):
         return True
     if role_for(user) in TRAINER_ROLES and user == session.team.coordinator:

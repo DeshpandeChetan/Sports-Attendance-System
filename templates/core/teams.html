@@ -11,6 +11,11 @@
   {% endif %}
 </div>
 
+<div class="metric-grid sports-summary-grid">
+  <div class="metric metric-teams"><i class="bi bi-diagram-3"></i><span>Total Teams</span><strong>{{ team_stats.total }}</strong></div>
+  <div class="metric metric-attendance"><i class="bi bi-clipboard-check"></i><span>Practice Completed</span><strong>{{ team_stats.completed_sessions }}</strong></div>
+</div>
+
 <section class="panel">
   <div class="section-title"><h2>Team List</h2><span class="small text-muted">All sports teams</span></div>
   <div class="table-responsive">
@@ -38,7 +43,7 @@
                   <button class="btn btn-sm btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown">Actions</button>
                   <ul class="dropdown-menu dropdown-menu-end">
                     {% if user.is_superuser or user.profile.role == 'SUPER_ADMIN' or user.profile.role == 'SUB_ADMIN' %}
-                      <li><button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#teamViewModal" data-sport="{{ team.sport.name }}" data-name="{{ team.name }}" data-type="{{ team.get_team_type_display }}" data-gender="{{ team.get_gender_display }}" data-captain="{% if team.captain %}{{ team.captain.get_full_name|default:'Name not set' }}{% else %}-{% endif %}" data-vice-captain="{% if team.vice_captain %}{{ team.vice_captain.get_full_name|default:'Name not set' }}{% else %}-{% endif %}" data-trainer="{% if team.coordinator %}{{ team.coordinator.get_full_name|default:'Name not set' }}{% else %}-{% endif %}" data-status="{{ team.is_active|yesno:'Active,Inactive' }}"><i class="bi bi-eye"></i> View</button></li>
+                      <li><button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#teamViewModal" data-sport="{{ team.sport.name }}" data-name="{{ team.name }}" data-type="{{ team.get_team_type_display }}" data-gender="{{ team.get_gender_display }}" data-captain="{% if team.captain %}{{ team.captain.get_full_name|default:'Name not set' }}{% else %}-{% endif %}" data-vice-captain="{% if team.vice_captain %}{{ team.vice_captain.get_full_name|default:'Name not set' }}{% else %}-{% endif %}" data-trainer="{% if team.coordinator %}{{ team.coordinator.get_full_name|default:'Name not set' }}{% else %}-{% endif %}" data-players="{{ team.player_count }}" data-scheduled="{{ team.scheduled_session_count }}" data-completed="{{ team.completed_session_count }}" data-status="{{ team.is_active|yesno:'Active,Inactive' }}"><i class="bi bi-eye"></i> View</button></li>
                     {% endif %}
                     <li><button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#teamPlayersModal{{ team.pk }}"><i class="bi bi-people"></i> View Team Players</button></li>
                     {% if user.is_superuser or user.profile.role == 'SUPER_ADMIN' or user.profile.role == 'SUB_ADMIN' %}
@@ -92,6 +97,11 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
+        <div class="metric-grid admin-metric-grid mb-3">
+          <div class="metric metric-students"><i class="bi bi-people"></i><span>Total Players</span><strong>{{ team.player_count }}</strong></div>
+          <div class="metric metric-sports"><i class="bi bi-calendar-event"></i><span>Practice Scheduled</span><strong>{{ team.scheduled_session_count }}</strong></div>
+          <div class="metric metric-attendance"><i class="bi bi-clipboard-check"></i><span>Practice Completed</span><strong>{{ team.completed_session_count }}</strong></div>
+        </div>
         {% if team.can_manage_players %}<form method="post" data-team-players-form>{% csrf_token %}<input type="hidden" name="action" value="update_team_players"><input type="hidden" name="team_id" value="{{ team.pk }}">{% endif %}
           <div class="table-responsive">
             <table class="table align-middle data-table">
@@ -133,15 +143,21 @@
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
       <div class="modal-header"><h5 class="modal-title">Team Details</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-      <div class="modal-body detail-list">
-        <div><span>Sport</span><strong data-field="view-sport"></strong></div>
-        <div><span>Team Name</span><strong data-field="view-name"></strong></div>
-        <div><span>Type</span><strong data-field="view-type"></strong></div>
-        <div><span>Gender</span><strong data-field="view-gender"></strong></div>
-        <div><span>Captain</span><strong data-field="view-captain"></strong></div>
-        <div><span>Vice Captain</span><strong data-field="view-vice-captain"></strong></div>
-        <div><span>Trainer</span><strong data-field="view-trainer"></strong></div>
-        <div><span>Status</span><strong data-field="view-status"></strong></div>
+      <div class="modal-body">
+        <div class="metric-grid view-stat-grid mb-3">
+          <div class="metric metric-students"><i class="bi bi-people"></i><span>Total Players</span><strong data-field="view-players"></strong></div>
+          <div class="metric metric-attendance"><i class="bi bi-clipboard-check"></i><span>Practice Completed</span><strong data-field="view-completed"></strong></div>
+        </div>
+        <div class="detail-list">
+          <div><span>Sport</span><strong data-field="view-sport"></strong></div>
+          <div><span>Team Name</span><strong data-field="view-name"></strong></div>
+          <div><span>Type</span><strong data-field="view-type"></strong></div>
+          <div><span>Gender</span><strong data-field="view-gender"></strong></div>
+          <div><span>Captain</span><strong data-field="view-captain"></strong></div>
+          <div><span>Vice Captain</span><strong data-field="view-vice-captain"></strong></div>
+          <div><span>Trainer</span><strong data-field="view-trainer"></strong></div>
+          <div><span>Status</span><strong data-field="view-status"></strong></div>
+        </div>
       </div>
       <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button></div>
     </div>
@@ -212,7 +228,7 @@
   document.getElementById('teamViewModal')?.addEventListener('show.bs.modal', event => {
     const b = event.relatedTarget;
     const modal = event.currentTarget;
-    ['sport','name','type','gender','captain','viceCaptain','trainer','status'].forEach(key => {
+    ['sport','name','type','gender','captain','viceCaptain','trainer','players','scheduled','completed','status'].forEach(key => {
       const field = modal.querySelector(`[data-field="view-${key.replace(/[A-Z]/g, m => '-' + m.toLowerCase())}"]`);
       if (field) field.textContent = b?.dataset[key] || '-';
     });
