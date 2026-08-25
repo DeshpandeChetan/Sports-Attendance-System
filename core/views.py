@@ -127,7 +127,7 @@ def dashboard(request):
             else "Student"
         ),
         "today_sessions": add_session_permissions(request.user, sessions.filter(start_at__date=today)[:8]),
-        "today_meetings": visible_meetings(request.user).prefetch_related("sports", "teams", "trainers", "participants").select_related("scheduled_by").filter(meeting_date=today)[:8],
+        "today_meetings": add_meeting_display_data(visible_meetings(request.user).prefetch_related("sports", "teams", "trainers", "participants").select_related("scheduled_by").filter(meeting_date=today)[:8]),
         "upcoming_sessions": add_session_permissions(request.user, upcoming_sessions),
         "completed_sessions": add_session_permissions(request.user, completed_sessions),
         "attendance_percent": attendance_percentage(request.user),
@@ -225,6 +225,17 @@ def visible_sessions(user):
 
 def visible_meetings(user):
     return Meeting.objects.filter(Q(participants=user) | Q(scheduled_by=user)).distinct()
+
+
+def add_meeting_display_data(meetings):
+    meeting_list = list(meetings)
+    for meeting in meeting_list:
+        team_names = [str(team) for team in meeting.teams.all()]
+        meeting.team_names_full = "; ".join(team_names) or "-"
+        meeting.team_names_preview = "; ".join(team_names[:3]) or "-"
+        meeting.has_more_teams = len(team_names) > 3
+        meeting.scheduled_by_name = user_label(meeting.scheduled_by) if meeting.scheduled_by else "-"
+    return meeting_list
 
 
 def add_session_permissions(user, sessions):
@@ -2486,7 +2497,7 @@ def meetings_list(request):
         "completed": meeting_qs.filter(status=Meeting.Status.COMPLETED).count(),
         "cancelled": meeting_qs.filter(status=Meeting.Status.CANCELLED).count(),
     }
-    meetings = list(meeting_qs)
+    meetings = add_meeting_display_data(meeting_qs)
     for meeting in meetings:
         meeting.sport_ids_csv = ",".join(str(sport.pk) for sport in meeting.sports.all())
         meeting.team_ids_csv = ",".join(str(team.pk) for team in meeting.teams.all())

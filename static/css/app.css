@@ -470,6 +470,14 @@ img.avatar {
   margin: 0 0 .55rem;
 }
 
+.sidebar-footer-credit {
+  color: rgba(255, 255, 255, .56);
+  display: block;
+  font-size: .72rem;
+  line-height: 1.35;
+  margin-bottom: .25rem;
+}
+
 .sidebar-footer a {
   border: 0;
   border-radius: 0;
@@ -1406,15 +1414,19 @@ body.modal-open {
   bottom: 0;
   box-shadow: 0 -10px 24px rgba(0, 51, 102, .22);
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
   left: 0;
   position: fixed;
   right: 0;
   z-index: 1030;
 }
 
-.mobile-bottom-nav a {
+.mobile-bottom-nav a,
+.mobile-bottom-nav button {
   align-items: center;
+  appearance: none;
+  background: transparent !important;
+  border: 0;
   color: rgba(255, 255, 255, .72);
   display: flex;
   flex-direction: column;
@@ -1422,19 +1434,60 @@ body.modal-open {
   gap: .15rem;
   padding: .45rem .2rem;
   text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .mobile-bottom-nav i {
   font-size: 1rem;
 }
 
-.mobile-bottom-nav a:hover {
+.mobile-bottom-nav a:hover,
+.mobile-bottom-nav button:hover {
   color: #ffffff;
 }
 
 .mobile-bottom-nav a:hover i {
-  background: var(--tertiary);
+  background: rgba(127, 179, 213, .28);
+  color: #ffffff;
+}
+
+.mobile-bottom-nav a.active {
+  background: rgba(127, 179, 213, .18) !important;
+  color: #ffffff !important;
+  font-weight: 700;
+}
+
+.mobile-bottom-nav a.active i {
+  background: var(--tertiary) !important;
   color: var(--primary);
+}
+
+.mobile-bottom-nav a.active span {
+  color: #ffffff;
+}
+
+.mobile-bottom-nav button:hover i {
+  background: transparent;
+  color: #ffffff;
+}
+
+.mobile-bottom-nav button,
+.mobile-bottom-nav button:hover,
+.mobile-bottom-nav button:focus,
+.mobile-bottom-nav button:active,
+.mobile-bottom-nav button.show {
+  background: transparent !important;
+  box-shadow: none !important;
+  outline: 0 !important;
+}
+
+.mobile-bottom-nav button i,
+.mobile-bottom-nav button:hover i,
+.mobile-bottom-nav button:focus i,
+.mobile-bottom-nav button:active i,
+.mobile-bottom-nav button.show i {
+  background: transparent !important;
+  box-shadow: none !important;
 }
 
 .mobile-bottom-nav i {
