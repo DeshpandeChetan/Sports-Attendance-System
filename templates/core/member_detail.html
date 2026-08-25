@@ -33,8 +33,8 @@
     <div><span>Name</span><strong>{{ student.get_full_name|default:student.username }}</strong></div>
     <div><span>Email</span><strong>{{ student.email }}</strong></div>
     <div><span>Mobile</span><strong>{{ student.profile.phone|default:"-" }}</strong></div>
+    <div><span>School</span><strong>{{ student.profile.school.name|default:"-" }}</strong></div>
     <div><span>Department</span><strong>{{ student.profile.department|default:"-" }}</strong></div>
-    <div><span>Class</span><strong>{{ student.profile.class_name|default:"-" }}</strong></div>
     <div><span>Register No</span><strong>{{ student.profile.register_no|default:"-" }}</strong></div>
     <div><span>Gender</span><strong>{{ student.profile.gender|default:"-" }}</strong></div>
     <div><span>DOB</span><strong>{{ student.profile.dob|date:"d M Y"|default:"-" }}</strong></div>

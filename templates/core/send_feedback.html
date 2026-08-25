@@ -3,7 +3,6 @@
 {% block content %}
 <div class="page-head">
   <div><p class="eyebrow">Private</p><h1>Send Feedback</h1><p class="text-muted mb-0">Send confidential feedback for a selected practice session.</p></div>
-  <a class="btn btn-outline-secondary" href="{% url 'feedback' %}"><i class="bi bi-arrow-left"></i> Back</a>
 </div>
 
 <section class="panel">
@@ -18,43 +17,77 @@
         {% endfor %}
       </select>
     </div>
+
     <div class="col-md-6">
       <label class="form-label">Session</label>
-      <select class="form-select" name="session" data-field="feedback-session" required>
-        <option value="" selected disabled>Select Session</option>
-        {% for session in sessions %}
-          <option value="{{ session.pk }}" data-trainer="{{ session.team.coordinator_id|default:'' }}" {% if request.POST.session == session.pk|stringformat:"s" %}selected{% endif %}>{{ session.title|default:"Practice session" }} - {{ session.team.sport.name }} - {{ session.team.get_gender_display }} {{ session.team.name }} ({{ session.start_at|date:"d M Y" }})</option>
-        {% empty %}
-          <option value="" disabled>No sessions available</option>
-        {% endfor %}
-      </select>
+      <div class="dropdown searchable-select" data-searchable-single>
+        <button class="form-select text-start" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" data-field="session-label">Select Session</button>
+        <input type="hidden" name="session" data-field="feedback-session" value="{{ request.POST.session }}" required>
+        <div class="dropdown-menu searchable-select-menu">
+          <div class="searchable-select-search">
+            <input class="form-control form-control-sm" type="search" data-field="session-search" placeholder="Search session">
+          </div>
+          <div class="searchable-select-options">
+            {% for session in sessions %}
+              <button type="button" class="dropdown-item searchable-single-option" data-value="{{ session.pk }}" data-label="{{ session.title|default:'Practice session' }} - {{ session.team.sport.name }} - {{ session.team.get_gender_display }} {{ session.team.name }} ({{ session.start_at|date:'d M Y' }})" data-trainer="{{ session.team.coordinator_id|default:'' }}">
+                {{ session.title|default:"Practice session" }} - {{ session.team.sport.name }} - {{ session.team.get_gender_display }} {{ session.team.name }} ({{ session.start_at|date:"d M Y" }})
+              </button>
+            {% empty %}
+              <span class="dropdown-item text-muted">No sessions available</span>
+            {% endfor %}
+          </div>
+          <div class="searchable-select-footer"><button class="btn btn-sm btn-outline-secondary" type="button" data-action="close-dropdown">Close</button></div>
+        </div>
+      </div>
     </div>
 
     {% if is_feedback_admin or is_feedback_trainer %}
-      <div class="col-md-6 d-none" data-student-field>
-        <label class="form-label">Student</label>
-        <select class="form-select" name="student" data-field="student">
-          <option value="" selected>Select Student</option>
-          {% for student in students %}
-            <option value="{{ student.pk }}" {% if request.POST.student == student.pk|stringformat:"s" %}selected{% endif %}>{{ student.get_full_name|default:student.email }}</option>
-          {% empty %}
-            <option value="" disabled>No students available</option>
-          {% endfor %}
-        </select>
+      <div class="col-md-6 d-none" data-student-field data-recipient-list>
+        <label class="form-label">Students</label>
+        <div class="dropdown searchable-select" data-searchable-multi>
+          <button class="form-select text-start" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" data-field="student-label">Select Students</button>
+          <div class="dropdown-menu searchable-select-menu">
+            <div class="searchable-select-search">
+              <input class="form-control form-control-sm" type="search" data-field="multi-search" placeholder="Search student">
+            </div>
+            <div class="searchable-select-options">
+              {% for student in students %}
+                <label class="dropdown-item searchable-check-option">
+                  <input class="form-check-input me-2" type="checkbox" name="students" value="{{ student.pk }}" data-field="student" data-label="{{ student.get_full_name|default:student.email }}" {% if student.pk|stringformat:"s" in selected_student_ids %}checked{% endif %}>
+                  <span>{{ student.get_full_name|default:student.email }}</span>
+                </label>
+              {% empty %}
+                <span class="dropdown-item text-muted">No students available</span>
+              {% endfor %}
+            </div>
+            <div class="searchable-select-footer"><button class="btn btn-sm btn-outline-secondary" type="button" data-action="close-dropdown">Close</button></div>
+          </div>
+        </div>
       </div>
     {% endif %}
 
     {% if is_feedback_admin or is_feedback_student %}
-      <div class="col-md-6 d-none" data-trainer-field>
-        <label class="form-label">Trainer</label>
-        <select class="form-select" name="trainer" data-field="trainer">
-          <option value="" selected>Select Trainer</option>
-          {% for trainer in trainers %}
-            <option value="{{ trainer.pk }}" {% if request.POST.trainer == trainer.pk|stringformat:"s" %}selected{% endif %}>{{ trainer.get_full_name|default:trainer.email }}</option>
-          {% empty %}
-            <option value="" disabled>No trainers available</option>
-          {% endfor %}
-        </select>
+      <div class="col-md-6 d-none" data-trainer-field data-recipient-list>
+        <label class="form-label">Trainers</label>
+        <div class="dropdown searchable-select" data-searchable-multi>
+          <button class="form-select text-start" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" data-field="trainer-label">Select Trainers</button>
+          <div class="dropdown-menu searchable-select-menu">
+            <div class="searchable-select-search">
+              <input class="form-control form-control-sm" type="search" data-field="multi-search" placeholder="Search trainer">
+            </div>
+            <div class="searchable-select-options">
+              {% for trainer in trainers %}
+                <label class="dropdown-item searchable-check-option">
+                  <input class="form-check-input me-2" type="checkbox" name="trainers" value="{{ trainer.pk }}" data-field="trainer" data-label="{{ trainer.get_full_name|default:trainer.email }}" {% if trainer.pk|stringformat:"s" in selected_trainer_ids %}checked{% endif %}>
+                  <span>{{ trainer.get_full_name|default:trainer.email }}</span>
+                </label>
+              {% empty %}
+                <span class="dropdown-item text-muted">No trainers available</span>
+              {% endfor %}
+            </div>
+            <div class="searchable-select-footer"><button class="btn btn-sm btn-outline-secondary" type="button" data-action="close-dropdown">Close</button></div>
+          </div>
+        </div>
       </div>
     {% endif %}
 
@@ -72,35 +105,116 @@
 
 {% block scripts %}
 <script>
+  function dropdownInstance(element) {
+    const toggle = element?.querySelector('[data-bs-toggle="dropdown"]');
+    return toggle ? bootstrap.Dropdown.getOrCreateInstance(toggle) : null;
+  }
+
+  function optionMatches(option, term) {
+    return !term || option.textContent.toLowerCase().includes(term);
+  }
+
+  function updateMultiLabel(scope) {
+    const button = scope.querySelector('[data-field$="-label"]');
+    const checked = Array.from(scope.querySelectorAll('input[type="checkbox"]:checked'));
+    if (!button) return;
+    if (!checked.length) {
+      button.textContent = button.dataset.placeholder || button.textContent || 'Select';
+      return;
+    }
+    const names = checked.map(input => input.dataset.label || input.closest('label')?.textContent.trim()).filter(Boolean);
+    button.textContent = names.length <= 2 ? names.join(', ') : `${names.length} selected`;
+  }
+
+  function updateAllMultiLabels() {
+    document.querySelectorAll('[data-searchable-multi]').forEach(scope => {
+      const button = scope.querySelector('[data-field$="-label"]');
+      if (button && !button.dataset.placeholder) button.dataset.placeholder = button.textContent;
+      updateMultiLabel(scope);
+    });
+  }
+
+  function selectedSessionTrainer() {
+    const input = document.querySelector('[data-field="feedback-session"]');
+    const option = document.querySelector(`[data-value="${input?.value || ''}"]`);
+    return option?.dataset.trainer || '';
+  }
+
+  function setSessionOption(option) {
+    const input = document.querySelector('[data-field="feedback-session"]');
+    const label = document.querySelector('[data-field="session-label"]');
+    if (!input || !label || !option) return;
+    input.value = option.dataset.value || '';
+    label.textContent = option.dataset.label || option.textContent.trim();
+    document.querySelectorAll('.searchable-single-option').forEach(item => item.classList.toggle('active', item === option));
+    syncAssignedTrainerDefault(true);
+    dropdownInstance(option.closest('.dropdown'))?.hide();
+  }
+
   function syncFeedbackRecipients() {
     const type = document.querySelector('[data-field="recipient-type"]')?.value || '';
     const studentWrap = document.querySelector('[data-student-field]');
     const trainerWrap = document.querySelector('[data-trainer-field]');
-    const trainerNote = document.querySelector('[data-trainer-note]');
-    const studentSelect = document.querySelector('[data-field="student"]');
-    const trainerSelect = document.querySelector('[data-field="trainer"]');
     const needsStudent = type === 'student' || type === 'both';
     const needsTrainer = type === 'trainer' || type === 'both';
     studentWrap?.classList.toggle('d-none', !needsStudent);
     trainerWrap?.classList.toggle('d-none', !needsTrainer);
-    trainerNote?.classList.toggle('d-none', !needsTrainer);
-    if (studentSelect) studentSelect.required = needsStudent && Boolean(studentWrap);
-    if (trainerSelect) trainerSelect.required = needsTrainer && Boolean(trainerWrap);
     if (needsTrainer) syncAssignedTrainerDefault(false);
   }
 
   function syncAssignedTrainerDefault(force = true) {
-    const sessionSelect = document.querySelector('[data-field="feedback-session"]');
-    const trainerSelect = document.querySelector('[data-field="trainer"]');
-    if (!sessionSelect || !trainerSelect) return;
-    const assignedTrainer = sessionSelect.selectedOptions[0]?.dataset.trainer || '';
-    if (assignedTrainer && (force || !trainerSelect.value) && Array.from(trainerSelect.options).some(option => option.value === assignedTrainer)) {
-      trainerSelect.value = assignedTrainer;
+    const trainerInputs = Array.from(document.querySelectorAll('[data-field="trainer"]'));
+    if (!trainerInputs.length) return;
+    const assignedTrainer = selectedSessionTrainer();
+    const hasCheckedTrainer = trainerInputs.some(input => input.checked);
+    const assignedInput = trainerInputs.find(input => input.value === assignedTrainer);
+    if (assignedInput && (force || !hasCheckedTrainer)) {
+      assignedInput.checked = true;
+      updateMultiLabel(assignedInput.closest('[data-searchable-multi]'));
     }
   }
 
   document.querySelector('[data-field="recipient-type"]')?.addEventListener('change', syncFeedbackRecipients);
-  document.querySelector('[data-field="feedback-session"]')?.addEventListener('change', () => syncAssignedTrainerDefault(true));
+
+  document.querySelectorAll('[data-field="session-search"], [data-field="multi-search"]').forEach(input => {
+    input.addEventListener('click', event => event.stopPropagation());
+    input.addEventListener('input', event => {
+      const term = event.target.value.trim().toLowerCase();
+      const menu = event.target.closest('.searchable-select-menu');
+      menu?.querySelectorAll('.searchable-single-option, .searchable-check-option').forEach(option => {
+        option.classList.toggle('d-none', !optionMatches(option, term));
+      });
+    });
+  });
+
+  document.querySelectorAll('.searchable-single-option').forEach(option => {
+    option.addEventListener('click', () => setSessionOption(option));
+  });
+
+  document.querySelectorAll('[data-searchable-multi] input[type="checkbox"]').forEach(input => {
+    input.addEventListener('click', event => event.stopPropagation());
+    input.addEventListener('change', event => {
+      updateMultiLabel(event.target.closest('[data-searchable-multi]'));
+    });
+  });
+
+  document.querySelectorAll('[data-action="close-dropdown"]').forEach(button => {
+    button.addEventListener('click', event => dropdownInstance(event.target.closest('.dropdown'))?.hide());
+  });
+
+  const initialSessionId = document.querySelector('[data-field="feedback-session"]')?.value || '';
+  if (initialSessionId) {
+    const initialOption = document.querySelector(`.searchable-single-option[data-value="${initialSessionId}"]`);
+    if (initialOption) {
+      const input = document.querySelector('[data-field="feedback-session"]');
+      const label = document.querySelector('[data-field="session-label"]');
+      input.value = initialOption.dataset.value || '';
+      label.textContent = initialOption.dataset.label || initialOption.textContent.trim();
+      initialOption.classList.add('active');
+    }
+  }
+
+  updateAllMultiLabels();
   syncFeedbackRecipients();
 </script>
 {% endblock %}

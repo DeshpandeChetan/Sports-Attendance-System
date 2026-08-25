@@ -26,6 +26,7 @@ from .forms import (
     MembershipForm,
     ProfileForm,
     ReportFilterForm,
+    SchoolForm,
     SessionFeedbackForm,
     SessionForm,
     SportForm,
@@ -44,6 +45,7 @@ from .models import (
     Meeting,
     Membership,
     Notification,
+    School,
     Session,
     Sport,
     Team,
@@ -492,6 +494,11 @@ BULK_UPLOAD_TEMPLATES = {
         "headers": ["Venue Name", "Location", "Status"],
         "rows": [["Indoor Stadium", "Main sports block", "Active"]],
     },
+    "schools": {
+        "filename": "schools_bulk_upload_sample.xlsx",
+        "headers": ["School Name", "Description", "Status"],
+        "rows": [["School of Sciences", "Science and data science programmes", "Active"]],
+    },
     "teams": {
         "filename": "teams_bulk_upload_sample.xlsx",
         "headers": ["Sport", "Team Name", "Team Type", "Gender", "Captain Email", "Vice Captain Email", "Trainer Email", "Status"],
@@ -499,8 +506,8 @@ BULK_UPLOAD_TEMPLATES = {
     },
     "students": {
         "filename": "students_bulk_upload_sample.xlsx",
-        "headers": ["Student Name", "Student Email", "Mobile Number", "Reg No", "Department", "Class", "Gender", "Sport", "Team Type", "Team", "Status"],
-        "rows": [["Rahul Sharma", "rahul.sharma@christuniversity.in", "9876543210", "22104321", "MSDS", "2 MSc DS", "Male", "Basketball", "University", "Men's Team A", "Active"]],
+        "headers": ["Student Name", "Student Email", "Mobile Number", "Reg No", "School", "Department", "Gender", "Sport", "Team Type", "Team", "Status"],
+        "rows": [["Rahul Sharma", "rahul.sharma@christuniversity.in", "9876543210", "22104321", "School of Sciences", "MSDS", "Male", "Basketball", "University", "Men's Team A", "Active"]],
     },
     "trainers": {
         "filename": "trainers_bulk_upload_sample.xlsx",
@@ -790,7 +797,19 @@ def saved_meeting_schedule_tuple(meeting):
     )
 
 
-def save_student_record(full_name, email, department="", class_name="", phone="", register_no="", gender="", existing_user=None):
+def resolve_school(value=None, school_id=None, create=False):
+    if school_id and str(school_id).isdigit():
+        return School.objects.filter(pk=int(school_id)).first()
+    school_name = str(value or "").strip()
+    if not school_name:
+        return None
+    if create:
+        school, _ = School.objects.get_or_create(name=school_name, defaults={"is_active": True})
+        return school
+    return School.objects.filter(name__iexact=school_name).first()
+
+
+def save_student_record(full_name, email, school=None, department="", phone="", register_no="", gender="", existing_user=None):
     email = str(email or "").strip().lower()
     phone = str(phone or "").strip()
     register_no = str(register_no or "").strip()
@@ -811,12 +830,12 @@ def save_student_record(full_name, email, department="", class_name="", phone=""
     user.save()
     profile, _ = UserProfile.objects.get_or_create(user=user)
     profile.role = UserProfile.Role.MEMBER
+    profile.school = school
     profile.department = str(department or "").strip()
-    profile.class_name = str(class_name or "").strip()
     profile.phone = phone
     profile.register_no = register_no
     profile.gender = normalize_gender(gender)
-    profile.save(update_fields=["role", "department", "class_name", "phone", "register_no", "gender", "updated_at"])
+    profile.save(update_fields=["role", "school", "department", "phone", "register_no", "gender", "updated_at"])
     return user
 
 
@@ -834,12 +853,12 @@ def validate_unique_register_no(register_no, user=None):
 def build_student_from_post(request, existing_user=None):
     full_name = request.POST.get("student_name", "").strip()
     email = request.POST.get("student_email", "").strip().lower()
+    school = resolve_school(school_id=request.POST.get("school"))
     department = request.POST.get("department", "").strip()
-    class_name = request.POST.get("class_name", "").strip()
     phone = request.POST.get("mobile_number", "").strip()
     register_no = request.POST.get("register_no", "").strip()
     gender = request.POST.get("gender", "").strip()
-    return save_student_record(full_name, email, department, class_name, phone, register_no, gender, existing_user=existing_user)
+    return save_student_record(full_name, email, school, department, phone, register_no, gender, existing_user=existing_user)
 
 
 def create_student_from_access_request(access_request):
@@ -905,6 +924,22 @@ def import_venues_from_file(uploaded_file):
         Venue.objects.update_or_create(
             name=name,
             defaults={"location": str(row.get("location") or "").strip(), "is_active": truthy_cell(row.get("status") or row.get("active"), True)},
+        )
+        created += 1
+    return created, errors
+
+
+def import_schools_from_file(uploaded_file):
+    created = 0
+    errors = []
+    for index, row in enumerate(read_bulk_upload_rows(uploaded_file), start=2):
+        name = str(row.get("school_name") or row.get("name") or "").strip()
+        if not name:
+            errors.append(f"Row {index}: School Name is required.")
+            continue
+        School.objects.update_or_create(
+            name=name,
+            defaults={"description": str(row.get("description") or "").strip(), "is_active": truthy_cell(row.get("status") or row.get("active"), True)},
         )
         created += 1
     return created, errors
@@ -991,11 +1026,12 @@ def import_students_from_file(uploaded_file, user=None):
                 errors.append(f"Row {index}: You cannot add students to this team.")
                 continue
         try:
+            school = resolve_school(row.get("school"), create=True)
             student = save_student_record(
                 row.get("student_name"),
                 row.get("student_email"),
-                row.get("department"),
-                row.get("class"),
+                school,
+                row.get("department") or row.get("class"),
                 row.get("mobile_number"),
                 row.get("reg_no") or row.get("register_no"),
                 row.get("gender"),
@@ -1253,6 +1289,48 @@ def venues_list(request):
         "venues": venues,
         "venue_count": len(venues),
         "active_venue_count": sum(1 for venue in venues if venue.is_active),
+    })
+
+
+@login_required
+@role_required(*ADMIN_ROLES)
+def schools_list(request):
+    if request.method == "POST":
+        action = request.POST.get("action")
+        school_id = request.POST.get("school_id")
+        school = get_object_or_404(School, pk=school_id) if school_id else None
+        if action in {"create", "update"}:
+            form = SchoolForm(request.POST, instance=school)
+            if form.is_valid():
+                form.save()
+                messages.success(request, "School saved successfully.")
+            else:
+                messages.error(request, "Please correct the school details and try again.")
+        elif action == "bulk_upload":
+            try:
+                created, errors = import_schools_from_file(request.FILES.get("bulk_file"))
+                add_bulk_upload_messages(request, created, errors)
+            except ValueError as exc:
+                messages.error(request, str(exc))
+        elif action == "deactivate" and school:
+            school.is_active = False
+            school.save(update_fields=["is_active", "updated_at"])
+            messages.success(request, f"{school.name} deactivated.")
+        elif action == "activate" and school:
+            school.is_active = True
+            school.save(update_fields=["is_active", "updated_at"])
+            messages.success(request, f"{school.name} activated.")
+        elif action == "delete" and school:
+            school_name = school.name
+            school.delete()
+            messages.success(request, f"{school_name} deleted.")
+        return redirect("schools")
+
+    schools = list(School.objects.annotate(student_count=Count("profiles")).order_by("name"))
+    return render(request, "core/schools.html", {
+        "schools": schools,
+        "school_count": len(schools),
+        "active_school_count": sum(1 for school in schools if school.is_active),
     })
 
 
@@ -1723,6 +1801,7 @@ def members_list(request):
     student_rows.sort(key=lambda row: (row["account_status"] == UserProfile.AccountStatus.DEACTIVATED, (row["user"].get_full_name() or row["user"].email or row["user"].username).lower()))
     teams = allowed_teams.select_related("sport").order_by("sport__name", "name")
     sports = Sport.objects.filter(teams__in=allowed_teams, is_active=True).distinct().order_by("name")
+    schools = School.objects.filter(is_active=True).order_by("name")
     student_stats = {
         "total": len(student_rows),
         "active": sum(1 for row in student_rows if row["account_status"] == UserProfile.AccountStatus.ACTIVE and row["is_active"]),
@@ -1734,6 +1813,7 @@ def members_list(request):
         "student_rows": student_rows,
         "teams": teams,
         "sports": sports,
+        "schools": schools,
         "team_types": Team.TeamType.choices,
         "login_requests": login_requests,
         "can_manage_students": can_manage_students,
@@ -2712,8 +2792,8 @@ def send_feedback(request):
     if request.method == "POST":
         recipient_type = request.POST.get("recipient_type")
         session_id = request.POST.get("session")
-        student_id = request.POST.get("student")
-        trainer_id = request.POST.get("trainer")
+        student_ids = parse_int_ids(request.POST.getlist("students") or request.POST.getlist("student"))
+        trainer_ids = parse_int_ids(request.POST.getlist("trainers") or request.POST.getlist("trainer"))
         message_text = (request.POST.get("message") or "").strip()
         session = sessions.filter(pk=session_id).first() if session_id else None
         receivers = []
@@ -2727,35 +2807,35 @@ def send_feedback(request):
 
         if is_admin_user(request.user):
             if recipient_type in {"student", "both"}:
-                student = students.filter(pk=student_id).first() if student_id else None
-                if student:
-                    receivers.append(student)
+                selected_students = list(students.filter(pk__in=student_ids)) if student_ids else []
+                if selected_students:
+                    receivers.extend(selected_students)
                 else:
                     errors.append("Select Student.")
             if recipient_type in {"trainer", "both"}:
-                trainer = trainers.filter(pk=trainer_id).first() if trainer_id else None
-                if trainer:
-                    receivers.append(trainer)
+                selected_trainers = list(trainers.filter(pk__in=trainer_ids)) if trainer_ids else []
+                if selected_trainers:
+                    receivers.extend(selected_trainers)
                 else:
                     errors.append("Select Trainer.")
         elif user_role in TRAINER_ROLES:
             if recipient_type in {"admin", "both"}:
                 receivers.extend(admins)
             if recipient_type in {"student", "both"}:
-                student = students.filter(pk=student_id).first() if student_id else None
-                if student:
-                    receivers.append(student)
+                selected_students = list(students.filter(pk__in=student_ids)) if student_ids else []
+                if selected_students:
+                    receivers.extend(selected_students)
                 else:
                     errors.append("Select Student.")
         else:
             if recipient_type in {"admin", "both"}:
                 receivers.extend(admins)
             if recipient_type in {"trainer", "both"}:
-                trainer = trainers.filter(pk=trainer_id).first() if trainer_id else None
-                if not trainer and session:
-                    trainer = session.team.coordinator
-                if trainer:
-                    receivers.append(trainer)
+                selected_trainers = list(trainers.filter(pk__in=trainer_ids)) if trainer_ids else []
+                if not selected_trainers and session and session.team.coordinator:
+                    selected_trainers = [session.team.coordinator]
+                if selected_trainers:
+                    receivers.extend(selected_trainers)
                 else:
                     errors.append("No trainer is assigned to the selected session.")
 
@@ -2802,6 +2882,8 @@ def send_feedback(request):
         "is_feedback_admin": is_admin_user(request.user),
         "is_feedback_trainer": user_role in TRAINER_ROLES,
         "is_feedback_student": not is_admin_user(request.user) and user_role not in TRAINER_ROLES,
+        "selected_student_ids": {str(item) for item in parse_int_ids(request.POST.getlist("students") or request.POST.getlist("student"))},
+        "selected_trainer_ids": {str(item) for item in parse_int_ids(request.POST.getlist("trainers") or request.POST.getlist("trainer"))},
     })
 
 

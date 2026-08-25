@@ -1243,6 +1243,61 @@ body.modal-open {
   white-space: normal;
 }
 
+.searchable-select .form-select {
+  cursor: pointer;
+  min-height: 38px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.searchable-select-menu {
+  border: 1px solid rgba(104, 114, 128, .2);
+  border-radius: .85rem;
+  box-shadow: 0 16px 36px rgba(0, 51, 102, .14);
+  max-height: min(360px, 70vh);
+  min-width: 100%;
+  overflow: hidden;
+  padding: .5rem;
+}
+
+.searchable-select-search {
+  background: #fff;
+  padding-bottom: .45rem;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.searchable-select-options {
+  display: grid;
+  gap: .2rem;
+  max-height: 250px;
+  overflow-y: auto;
+  padding-right: .15rem;
+}
+
+.searchable-single-option,
+.searchable-check-option {
+  border-radius: .55rem;
+  white-space: normal;
+}
+
+.searchable-single-option.active,
+.searchable-check-option:has(input:checked) {
+  background: rgba(127, 179, 213, .22);
+  color: var(--primary);
+  font-weight: 700;
+}
+
+.searchable-select-footer {
+  border-top: 1px solid rgba(104, 114, 128, .14);
+  display: flex;
+  justify-content: flex-end;
+  margin-top: .45rem;
+  padding-top: .45rem;
+}
+
 .team-check-item input:checked ~ i,
 .membership-select-item input:checked ~ i {
   display: inline-flex;

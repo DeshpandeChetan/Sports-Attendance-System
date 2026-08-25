@@ -8,6 +8,7 @@ urlpatterns = [
     path("login/", views.login_page, name="login"),
     path("sports/", views.sports_list, name="sports"),
     path("venues/", views.venues_list, name="venues"),
+    path("schools/", views.schools_list, name="schools"),
     path("bulk-upload/sample/<str:kind>/", views.bulk_upload_sample, name="bulk_upload_sample"),
     path("sports/new/", views.sport_form, name="sport_create"),
     path("sports/<int:pk>/edit/", views.sport_form, name="sport_edit"),

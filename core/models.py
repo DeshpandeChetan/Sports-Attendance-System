@@ -29,6 +29,7 @@ class UserProfile(TimeStampedModel):
 
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="profile")
     role = models.CharField(max_length=20, choices=Role.choices, default=Role.MEMBER)
+    school = models.ForeignKey("School", on_delete=models.SET_NULL, null=True, blank=True, related_name="profiles")
     department = models.CharField(max_length=120, blank=True)
     class_name = models.CharField(max_length=120, blank=True)
     phone = models.CharField(max_length=20, blank=True)
@@ -68,6 +69,18 @@ class Sport(TimeStampedModel):
     name = models.CharField(max_length=120, unique=True)
     description = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
+
+    def __str__(self):
+        return self.name
+
+
+class School(TimeStampedModel):
+    name = models.CharField(max_length=160, unique=True)
+    description = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["name"]
 
     def __str__(self):
         return self.name

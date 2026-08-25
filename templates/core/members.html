@@ -50,7 +50,7 @@
   <div class="section-title"><h2>Student List</h2><span class="small text-muted">Registered and assigned students</span></div>
   <div class="table-responsive">
     <table class="table align-middle data-table">
-      <thead><tr><th data-filter="false">Student</th><th data-filter="false">Email</th><th data-filter="false">Mobile</th><th data-filter="false">Reg No</th><th>Department</th><th>Class</th><th data-filter-label="Sports">Team</th><th>Status</th><th class="text-end">Actions</th></tr></thead>
+      <thead><tr><th data-filter="false">Student</th><th data-filter="false">Email</th><th data-filter="false">Mobile</th><th data-filter="false">Reg No</th><th>School</th><th>Department</th><th data-filter-label="Sports">Team</th><th>Status</th><th class="text-end">Actions</th></tr></thead>
       <tbody>
         {% for row in student_rows %}
           <tr>
@@ -58,8 +58,8 @@
             <td>{{ row.user.email }}</td>
             <td>{{ row.user.profile.phone|default:"-" }}</td>
             <td>{{ row.user.profile.register_no|default:"-" }}</td>
+            <td>{{ row.user.profile.school.name|default:"-" }}</td>
             <td>{{ row.user.profile.department|default:"-" }}</td>
-            <td>{{ row.user.profile.class_name|default:"-" }}</td>
             <td>{% if row.assigned_team_labels %}{{ row.assigned_team_labels }}{% else %}<span class="text-muted">Not assigned</span>{% endif %}</td>
             <td>{% if row.account_status == 'DEACTIVATED' %}<span class="badge text-bg-secondary">Deactivated</span>{% elif row.is_active %}<span class="badge text-bg-success">Active</span>{% else %}<span class="badge text-bg-secondary">Inactive</span>{% endif %}</td>
             <td class="text-end">
@@ -69,9 +69,9 @@
                 <div class="dropdown">
                   <button class="btn btn-sm btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown">Actions</button>
                   <ul class="dropdown-menu dropdown-menu-end">
-                    <li><button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#studentViewModal" data-name="{{ row.user.get_full_name|default:row.user.username }}" data-email="{{ row.user.email }}" data-mobile="{{ row.user.profile.phone|default:'-' }}" data-register-no="{{ row.user.profile.register_no|default:'-' }}" data-department="{{ row.user.profile.department|default:'-' }}" data-class-name="{{ row.user.profile.class_name|default:'-' }}" data-gender="{{ row.user.profile.gender|default:'-' }}" data-sport="{% if row.assigned_sport_labels %}{{ row.assigned_sport_labels }}{% else %}-{% endif %}" data-team-type="{% if row.assigned_team_type_labels %}{{ row.assigned_team_type_labels }}{% else %}-{% endif %}" data-team="{% if row.assigned_team_labels %}{{ row.assigned_team_labels }}{% else %}Not assigned{% endif %}" data-status="{% if row.account_status == 'DEACTIVATED' %}Deactivated{% elif row.is_active %}Active{% else %}Inactive{% endif %}"><i class="bi bi-eye"></i> View</button></li>
+                    <li><button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#studentViewModal" data-name="{{ row.user.get_full_name|default:row.user.username }}" data-email="{{ row.user.email }}" data-mobile="{{ row.user.profile.phone|default:'-' }}" data-register-no="{{ row.user.profile.register_no|default:'-' }}" data-school="{{ row.user.profile.school.name|default:'-' }}" data-department="{{ row.user.profile.department|default:'-' }}" data-gender="{{ row.user.profile.gender|default:'-' }}" data-sport="{% if row.assigned_sport_labels %}{{ row.assigned_sport_labels }}{% else %}-{% endif %}" data-team-type="{% if row.assigned_team_type_labels %}{{ row.assigned_team_type_labels }}{% else %}-{% endif %}" data-team="{% if row.assigned_team_labels %}{{ row.assigned_team_labels }}{% else %}Not assigned{% endif %}" data-status="{% if row.account_status == 'DEACTIVATED' %}Deactivated{% elif row.is_active %}Active{% else %}Inactive{% endif %}"><i class="bi bi-eye"></i> View</button></li>
                     <li><a class="dropdown-item" href="{% url 'member_detail' row.user.pk %}"><i class="bi bi-card-list"></i> More Details</a></li>
-                    <li><button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#memberModal" data-mode="edit" data-id="{% if row.membership %}{{ row.membership.pk }}{% endif %}" data-user-id="{{ row.user.pk }}" data-name="{{ row.user.get_full_name|default:row.user.username }}" data-email="{{ row.user.email }}" data-mobile="{{ row.user.profile.phone }}" data-register-no="{{ row.user.profile.register_no }}" data-department="{{ row.user.profile.department }}" data-class-name="{{ row.user.profile.class_name }}" data-gender="{{ row.user.profile.gender }}" data-sport="{% if row.team %}{{ row.team.sport_id }}{% endif %}" data-team-type="{% if row.team %}{{ row.team.team_type }}{% endif %}" data-team="{% if row.team %}{{ row.team.pk }}{% endif %}" data-assigned-sports="{{ row.assigned_sport_ids }}" data-assigned-team-types="{{ row.assigned_team_types }}" data-assigned-teams="{{ row.assigned_team_ids }}" data-active="{{ row.is_active|yesno:'true,false' }}"><i class="bi bi-pencil"></i> Edit</button></li>
+                    <li><button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#memberModal" data-mode="edit" data-id="{% if row.membership %}{{ row.membership.pk }}{% endif %}" data-user-id="{{ row.user.pk }}" data-name="{{ row.user.get_full_name|default:row.user.username }}" data-email="{{ row.user.email }}" data-mobile="{{ row.user.profile.phone }}" data-register-no="{{ row.user.profile.register_no }}" data-school="{{ row.user.profile.school_id|default:'' }}" data-department="{{ row.user.profile.department }}" data-gender="{{ row.user.profile.gender }}" data-sport="{% if row.team %}{{ row.team.sport_id }}{% endif %}" data-team-type="{% if row.team %}{{ row.team.team_type }}{% endif %}" data-team="{% if row.team %}{{ row.team.pk }}{% endif %}" data-assigned-sports="{{ row.assigned_sport_ids }}" data-assigned-team-types="{{ row.assigned_team_types }}" data-assigned-teams="{{ row.assigned_team_ids }}" data-active="{{ row.is_active|yesno:'true,false' }}"><i class="bi bi-pencil"></i> Edit</button></li>
                     <li><button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#memberConfirmModal" data-action="deactivate" data-id="{% if row.membership %}{{ row.membership.pk }}{% endif %}" data-user-id="{{ row.user.pk }}" data-title="Deactivate Student" data-message="This will deactivate the student and move a copy to Deleted / Deactivated Users."><i class="bi bi-toggle-off"></i> Deactivate</button></li>
                     <li><button class="dropdown-item text-danger" data-bs-toggle="modal" data-bs-target="#memberConfirmModal" data-action="delete" data-id="{% if row.membership %}{{ row.membership.pk }}{% endif %}" data-user-id="{{ row.user.pk }}" data-title="Delete Student" data-message="This will move the student to Deleted / Deactivated Users as Deleted."><i class="bi bi-trash"></i> Delete</button></li>
                   </ul>
@@ -101,8 +101,8 @@
           <div class="col-md-6"><label class="form-label">Student Email</label><input class="form-control" type="email" name="student_email" data-field="email" pattern="^[^@\s]+@([A-Za-z0-9-]+\.)*christuniversity\.in$" title="Use a Christ University email ending with christuniversity.in" required></div>
           <div class="col-md-6"><label class="form-label">Mobile Number</label><input class="form-control" name="mobile_number" data-field="mobile" inputmode="numeric" pattern="[0-9]{10}" maxlength="10" placeholder="10 digit mobile number"></div>
           <div class="col-md-6"><label class="form-label">Reg No</label><input class="form-control" name="register_no" data-field="register-no" data-unique-register-no><div class="invalid-feedback">This registration number already exists</div></div>
+          <div class="col-md-6"><label class="form-label">School</label><select class="form-select" name="school" data-field="school"><option value="">Select School</option>{% for school in schools %}<option value="{{ school.pk }}">{{ school.name }}</option>{% endfor %}</select></div>
           <div class="col-md-6"><label class="form-label">Department</label><input class="form-control" name="department" data-field="department"></div>
-          <div class="col-md-6"><label class="form-label">Class</label><input class="form-control" name="class_name" data-field="class-name"></div>
           <div class="col-md-6"><label class="form-label">Gender</label><select class="form-select" name="gender" data-field="gender"><option value="">Select Gender</option><option value="Male">Male</option><option value="Female">Female</option></select></div>
           <div class="col-md-6">
             <label class="form-label">Sports</label>
@@ -161,8 +161,8 @@
         <div><span>Email</span><strong data-field="view-email"></strong></div>
         <div><span>Mobile</span><strong data-field="view-mobile"></strong></div>
         <div><span>Reg No</span><strong data-field="view-register-no"></strong></div>
+        <div><span>School</span><strong data-field="view-school"></strong></div>
         <div><span>Department</span><strong data-field="view-department"></strong></div>
-        <div><span>Class</span><strong data-field="view-class-name"></strong></div>
         <div><span>Gender</span><strong data-field="view-gender"></strong></div>
         <div><span>Sport</span><strong data-field="view-sport"></strong></div>
         <div><span>Team Type</span><strong data-field="view-team-type"></strong></div>
@@ -292,7 +292,7 @@
     const mode = b?.dataset.mode || 'create';
     modal.querySelector('.modal-title').textContent = mode === 'edit' ? 'Edit Student' : 'Add Student';
     modal.querySelector('[data-field="action"]').value = mode === 'edit' ? 'update' : 'create';
-    ['id','userId','name','email','mobile','registerNo','department','className','gender'].forEach(key => {
+    ['id','userId','name','email','mobile','registerNo','school','department','gender'].forEach(key => {
       const field = modal.querySelector(`[data-field="${key.replace(/[A-Z]/g, m => '-' + m.toLowerCase())}"]`);
       if (field) field.value = b?.dataset[key] || '';
     });
@@ -378,7 +378,7 @@
   document.getElementById('studentViewModal')?.addEventListener('show.bs.modal', event => {
     const b = event.relatedTarget;
     const modal = event.currentTarget;
-    ['name','email','mobile','registerNo','department','className','gender','sport','teamType','team','status'].forEach(key => {
+    ['name','email','mobile','registerNo','school','department','gender','sport','teamType','team','status'].forEach(key => {
       const field = modal.querySelector(`[data-field="view-${key.replace(/[A-Z]/g, m => '-' + m.toLowerCase())}"]`);
       if (field) field.textContent = b?.dataset[key] || '-';
     });

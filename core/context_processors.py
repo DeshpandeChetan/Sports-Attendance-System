@@ -12,6 +12,7 @@ def breadcrumbs(request):
         "members": "Add Students",
         "member_detail": "Student Details",
         "trainers": "Add Trainer",
+        "schools": "Schools",
         "venues": "Venues",
         "settings": "Settings",
         "deactivated_users": "Deleted / Deactivated Users",
@@ -23,6 +24,7 @@ def breadcrumbs(request):
         "my_attendance": "My Attendance",
         "my_profile": "My Profile",
         "feedback": "Feedback",
+        "send_feedback": "Send Feedback",
         "reports": "Reports",
         "notifications": "Notifications",
     }
@@ -34,6 +36,12 @@ def breadcrumbs(request):
         return {"breadcrumb_items": [
             {"label": "Dashboard", "url_name": "dashboard"},
             {"label": "Settings", "url_name": "settings"},
+            {"label": labels.get(url_name, "Page")},
+        ]}
+    if url_name == "send_feedback":
+        return {"breadcrumb_items": [
+            {"label": "Dashboard", "url_name": "dashboard"},
+            {"label": "Feedback", "url_name": "feedback"},
             {"label": labels.get(url_name, "Page")},
         ]}
     return {"breadcrumb_items": [{"label": "Dashboard", "url_name": "dashboard"}, {"label": labels.get(url_name, "Page")}]}

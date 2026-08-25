@@ -9,6 +9,7 @@ from .models import (
     LoginAccessRequest,
     Meeting,
     Membership,
+    School,
     Session,
     Sport,
     Team,
@@ -18,7 +19,7 @@ from .models import (
 
 @admin.register(UserProfile)
 class UserProfileAdmin(admin.ModelAdmin):
-    list_display = ("user", "role", "department", "class_name", "phone")
+    list_display = ("user", "role", "school", "department", "phone")
     list_filter = ("role",)
     search_fields = ("user__username", "user__email", "user__first_name", "user__last_name")
 
@@ -34,6 +35,13 @@ class LoginAccessRequestAdmin(admin.ModelAdmin):
 class SportAdmin(admin.ModelAdmin):
     list_display = ("name", "is_active", "created_at")
     search_fields = ("name",)
+    list_filter = ("is_active",)
+
+
+@admin.register(School)
+class SchoolAdmin(admin.ModelAdmin):
+    list_display = ("name", "is_active", "created_at")
+    search_fields = ("name", "description")
     list_filter = ("is_active",)
 
 

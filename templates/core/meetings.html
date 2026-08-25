@@ -41,6 +41,9 @@
             <div class="dropdown multi-select-dropdown">
               <button class="form-select text-start" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" data-field="meeting-sports-label">Select Sports</button>
               <div class="dropdown-menu multi-select-menu">
+                <div class="px-2 pb-2"><input class="form-control form-control-sm" type="search" data-field="meeting-dropdown-search" data-target="meeting-sport-check" placeholder="Search Sports"></div>
+                <label class="dropdown-item fw-semibold"><input class="form-check-input me-2" type="checkbox" data-field="meeting-sport-select-all"> Select All</label>
+                <div class="dropdown-divider"></div>
                 {% for sport in sports %}
                   <label class="dropdown-item"><input class="form-check-input me-2" type="checkbox" name="sports" value="{{ sport.pk }}" data-field="meeting-sport-check"> {{ sport.name }}</label>
                 {% empty %}
@@ -55,6 +58,9 @@
             <div class="dropdown multi-select-dropdown">
               <button class="form-select text-start" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" data-field="meeting-teams-label">Select Teams</button>
               <div class="dropdown-menu multi-select-menu">
+                <div class="px-2 pb-2"><input class="form-control form-control-sm" type="search" data-field="meeting-dropdown-search" data-target="meeting-team-check" placeholder="Search Teams"></div>
+                <label class="dropdown-item fw-semibold" data-team-select-all-row><input class="form-check-input me-2" type="checkbox" data-field="meeting-team-select-all"> Select All</label>
+                <div class="dropdown-divider" data-team-select-all-row></div>
                 {% for team in teams %}
                   <label class="dropdown-item" data-team-option data-sport="{{ team.sport_id }}"><input class="form-check-input me-2" type="checkbox" name="teams" value="{{ team.pk }}" data-field="meeting-team-check"> {{ team.sport.name }} - {{ team.get_team_type_display }} - {{ team.get_gender_display }} {{ team.name }}</label>
                 {% empty %}
@@ -68,6 +74,9 @@
             <div class="dropdown multi-select-dropdown">
               <button class="form-select text-start" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" data-field="meeting-trainers-label">Select Trainers</button>
               <div class="dropdown-menu multi-select-menu">
+                <div class="px-2 pb-2"><input class="form-control form-control-sm" type="search" data-field="meeting-dropdown-search" data-target="meeting-trainer-check" placeholder="Search Trainers"></div>
+                <label class="dropdown-item fw-semibold"><input class="form-check-input me-2" type="checkbox" data-field="meeting-trainer-select-all"> Select All</label>
+                <div class="dropdown-divider"></div>
                 {% for trainer in trainers %}
                   <label class="dropdown-item"><input class="form-check-input me-2" type="checkbox" name="trainers" value="{{ trainer.pk }}" data-field="meeting-trainer-check"> {{ trainer.get_full_name|default:trainer.email }}</label>
                 {% empty %}
@@ -217,6 +226,57 @@
     label.textContent = checked.length === 1 ? checked[0].closest('label')?.textContent.trim() : `${checked.length} selected`;
   }
 
+  function meetingInputs(field, visibleOnly = false) {
+    const inputs = Array.from(document.querySelectorAll(`[data-field="${field}"]`));
+    if (!visibleOnly) return inputs;
+    return inputs.filter(input => {
+      const label = input.closest('label');
+      return !label?.classList.contains('d-none');
+    });
+  }
+
+  function updateMeetingOptionVisibility(label) {
+    if (!label) return;
+    const hiddenBySport = label.dataset.hiddenBySport === 'true';
+    const hiddenBySearch = label.dataset.hiddenBySearch === 'true';
+    label.classList.toggle('d-none', hiddenBySport || hiddenBySearch);
+  }
+
+  function syncMeetingSelectAll(field, selectAllField, visibleOnly = false) {
+    const selectAll = document.querySelector(`[data-field="${selectAllField}"]`);
+    if (!selectAll) return;
+    const inputs = meetingInputs(field, visibleOnly);
+    const checkedCount = inputs.filter(input => input.checked).length;
+    selectAll.checked = Boolean(inputs.length && checkedCount === inputs.length);
+    selectAll.indeterminate = Boolean(checkedCount && checkedCount < inputs.length);
+    selectAll.disabled = inputs.length === 0;
+  }
+
+  function setMeetingSelectAll(field, checked, visibleOnly = false) {
+    meetingInputs(field, visibleOnly).forEach(input => {
+      input.checked = checked;
+    });
+  }
+
+  function syncAllMeetingSelectAll() {
+    syncMeetingSelectAll('meeting-sport-check', 'meeting-sport-select-all');
+    syncMeetingSelectAll('meeting-team-check', 'meeting-team-select-all', true);
+    syncMeetingSelectAll('meeting-trainer-check', 'meeting-trainer-select-all');
+  }
+
+  function filterMeetingDropdownOptions(input) {
+    const target = input.dataset.target;
+    const term = input.value.trim().toLowerCase();
+    if (!target) return;
+    input.closest('.multi-select-menu')?.querySelectorAll(`[data-field="${target}"]`).forEach(optionInput => {
+      const label = optionInput.closest('label');
+      if (!label) return;
+      label.dataset.hiddenBySearch = term && !label.textContent.toLowerCase().includes(term) ? 'true' : 'false';
+      updateMeetingOptionVisibility(label);
+    });
+    syncAllMeetingSelectAll();
+  }
+
   function selectedMeetingSports() {
     return checkedMeetingValues('meeting-sport-check');
   }
@@ -230,13 +290,15 @@
     document.querySelectorAll('[data-team-option]').forEach(option => {
       const visible = !sports.size || sports.has(option.dataset.sport);
       const input = option.querySelector('[data-field="meeting-team-check"]');
-      option.classList.toggle('d-none', !visible);
+      option.dataset.hiddenBySport = visible ? 'false' : 'true';
+      updateMeetingOptionVisibility(option);
       if (!visible && input) input.checked = false;
     });
     syncDropdownLabel('meeting-sport-check', 'meeting-sports-label', 'Select Sports');
     syncDropdownLabel('meeting-team-check', 'meeting-teams-label', 'Select Teams');
     if (sports.size) validateMeetingSports();
     syncMeetingParticipantModes();
+    syncAllMeetingSelectAll();
   }
 
   function syncMeetingParticipantModes() {
@@ -249,6 +311,7 @@
     });
     document.querySelector('[data-field="team-mode-empty"]')?.classList.toggle('d-none', visibleCount > 0);
     syncDropdownLabel('meeting-team-check', 'meeting-teams-label', 'Select Teams');
+    syncAllMeetingSelectAll();
   }
 
   function setCheckedValues(form, field, values) {
@@ -263,6 +326,15 @@
     form.querySelector('.modal-title').textContent = 'Schedule Meeting';
     form.querySelector('[data-field="meeting-submit"]').innerHTML = '<i class="bi bi-calendar2-check"></i> Schedule';
     form.querySelectorAll('[data-field="meeting-sport-check"], [data-field="meeting-team-check"], [data-field="meeting-trainer-check"]').forEach(input => input.checked = false);
+    form.querySelectorAll('[data-field="meeting-sport-select-all"], [data-field="meeting-team-select-all"], [data-field="meeting-trainer-select-all"]').forEach(input => {
+      input.checked = false;
+      input.indeterminate = false;
+    });
+    form.querySelectorAll('[data-field="meeting-dropdown-search"]').forEach(input => input.value = '');
+    form.querySelectorAll('[data-hidden-by-search]').forEach(item => {
+      item.dataset.hiddenBySearch = 'false';
+      updateMeetingOptionVisibility(item);
+    });
     form.querySelectorAll('[data-team-mode] input[value="LEADS"]').forEach(input => input.checked = true);
     syncMeetingTeams();
     syncMeetingParticipantModes();
@@ -295,6 +367,7 @@
     });
     toggleMeetingOtherVenue();
     syncDropdownLabel('meeting-trainer-check', 'meeting-trainers-label', 'Select Trainers');
+    syncMeetingSelectAll('meeting-trainer-check', 'meeting-trainer-select-all');
     validateMeetingTimes(form);
   }
 
@@ -328,6 +401,7 @@
     });
     toggleMeetingOtherVenue();
     syncDropdownLabel('meeting-trainer-check', 'meeting-trainers-label', 'Select Trainers');
+    syncMeetingSelectAll('meeting-trainer-check', 'meeting-trainer-select-all');
     bootstrap.Modal.getOrCreateInstance(modal).show();
   }
 
@@ -335,7 +409,26 @@
   document.querySelectorAll('[data-field="meeting-team-check"]').forEach(input => input.addEventListener('change', syncMeetingParticipantModes));
   document.querySelectorAll('[data-field="meeting-trainer-check"]').forEach(input => input.addEventListener('change', () => {
     syncDropdownLabel('meeting-trainer-check', 'meeting-trainers-label', 'Select Trainers');
+    syncMeetingSelectAll('meeting-trainer-check', 'meeting-trainer-select-all');
   }));
+  document.querySelector('[data-field="meeting-sport-select-all"]')?.addEventListener('change', event => {
+    setMeetingSelectAll('meeting-sport-check', event.target.checked);
+    syncMeetingTeams();
+  });
+  document.querySelector('[data-field="meeting-team-select-all"]')?.addEventListener('change', event => {
+    setMeetingSelectAll('meeting-team-check', event.target.checked, true);
+    syncMeetingParticipantModes();
+  });
+  document.querySelector('[data-field="meeting-trainer-select-all"]')?.addEventListener('change', event => {
+    setMeetingSelectAll('meeting-trainer-check', event.target.checked);
+    syncDropdownLabel('meeting-trainer-check', 'meeting-trainers-label', 'Select Trainers');
+    syncMeetingSelectAll('meeting-trainer-check', 'meeting-trainer-select-all');
+  });
+  document.querySelectorAll('[data-field="meeting-dropdown-search"]').forEach(input => {
+    input.addEventListener('click', event => event.stopPropagation());
+    input.addEventListener('keydown', event => event.stopPropagation());
+    input.addEventListener('input', event => filterMeetingDropdownOptions(event.target));
+  });
   document.getElementById('meetingModal')?.addEventListener('show.bs.modal', event => {
     const modal = event.currentTarget;
     const form = document.getElementById('meetingForm');
@@ -373,6 +466,7 @@
   syncMeetingTeams();
   toggleMeetingOtherVenue();
   syncDropdownLabel('meeting-trainer-check', 'meeting-trainers-label', 'Select Trainers');
+  syncAllMeetingSelectAll();
   restoreMeetingDraft();
   {% if meeting_preview %}
     bootstrap.Modal.getOrCreateInstance(document.getElementById('meetingPreviewModal')).show();

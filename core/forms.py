@@ -4,7 +4,7 @@ from django.db.models import Q
 from django.utils import timezone
 from datetime import datetime, time
 
-from .models import AttendanceRecord, Feedback, Membership, Session, Sport, Team, UserProfile, Venue
+from .models import AttendanceRecord, Feedback, Membership, School, Session, Sport, Team, UserProfile, Venue
 from .email_validation import INVALID_CHRIST_EMAIL_MESSAGE, validate_christ_email
 
 User = get_user_model()
@@ -37,6 +37,7 @@ class BootstrapFormMixin:
         "receiver": "Select Student",
         "session": "Select Session",
         "role": "Select Role",
+        "school": "Select School",
         "gender": "Select Gender",
         "team_type": "Select Team Type",
         "schedule_slot": "Select Schedule",
@@ -70,6 +71,12 @@ class VenueForm(BootstrapFormMixin, forms.ModelForm):
     class Meta:
         model = Venue
         fields = ["name", "location", "is_active"]
+
+
+class SchoolForm(BootstrapFormMixin, forms.ModelForm):
+    class Meta:
+        model = School
+        fields = ["name", "description", "is_active"]
 
 
 class TeamForm(BootstrapFormMixin, forms.ModelForm):
@@ -180,7 +187,7 @@ class ProfileForm(BootstrapFormMixin, forms.ModelForm):
 
     class Meta:
         model = UserProfile
-        fields = ["profile_image", "department", "class_name", "phone", "dob", "address", "register_no", "gender"]
+        fields = ["profile_image", "school", "department", "phone", "dob", "address", "register_no", "gender"]
         widgets = {
             "dob": forms.DateInput(attrs={"type": "date"}),
             "address": forms.Textarea(attrs={"rows": 3}),
@@ -190,6 +197,7 @@ class ProfileForm(BootstrapFormMixin, forms.ModelForm):
     def __init__(self, *args, **kwargs):
         self.user_instance = kwargs.pop("user_instance")
         super().__init__(*args, **kwargs)
+        self.fields["school"].queryset = School.objects.filter(is_active=True).order_by("name")
         self.fields["first_name"].initial = self.user_instance.first_name
         self.fields["last_name"].initial = self.user_instance.last_name
         self.fields["email"].initial = self.user_instance.email
