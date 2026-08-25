@@ -49,7 +49,7 @@ class ChristGoogleAccountAdapter(DefaultSocialAccountAdapter):
         if access_request.status == LoginAccessRequest.Status.APPROVED:
             return True
         if access_request.status == LoginAccessRequest.Status.REJECTED:
-            messages.error(request, "Your sports attendance login request was rejected. Please contact the Sports Department.")
+            messages.error(request, "Your Sportix: sports attendance login request was rejected. Please contact the Sports Department.")
             raise ImmediateHttpResponse(redirect("login"))
         if not created and full_name and access_request.full_name != full_name:
             access_request.full_name = full_name

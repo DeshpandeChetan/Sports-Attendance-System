@@ -77,7 +77,7 @@ def send_notification_emails(users, notification_type, context):
         seen.add(email)
         recipients.append((user, email))
 
-    subject = SUBJECTS.get(notification_type, context.get("title", "Sports Attendance Notification"))
+    subject = SUBJECTS.get(notification_type, context.get("title", "Sportix: Sports Attendance Notification"))
     messages = []
     preparation_failed_ids = []
     for user, email in recipients:
@@ -85,7 +85,7 @@ def send_notification_emails(users, notification_type, context):
             email_context = {**context, "recipient": user, "notification_type": notification_type}
             html = render_to_string("emails/notification.html", email_context)
             message = EmailMultiAlternatives(
-                subject=f"[Sports Attendance System] {subject}",
+                subject=f"[Sportix: Sports Attendance System] {subject}",
                 body=strip_tags(html),
                 from_email=settings.DEFAULT_FROM_EMAIL,
                 to=[email],

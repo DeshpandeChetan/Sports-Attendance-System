@@ -3130,7 +3130,7 @@ def report_base(title, report_type, cleaned):
         "type": report_type,
         "title": title,
         "university": "Christ (Deemed to be University), Pune Lavasa Campus",
-        "system": "Sports Attendance System",
+        "system": "Sportix: Sports Attendance System",
         "generated_at": timezone.localtime(),
         "filters": report_filter_labels(cleaned, report_type),
         "summary": [],
@@ -3480,7 +3480,7 @@ def export_report_pdf(report):
 
     def draw_footer():
         pdf.setFont("Helvetica", 7)
-        pdf.drawString(left, 22, "Sports Attendance System")
+        pdf.drawString(left, 22, "Sportix: Sports Attendance System")
         pdf.drawRightString(right, 22, f"Page {page}")
 
     def draw_header():

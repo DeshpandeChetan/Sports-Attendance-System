@@ -1,4 +1,4 @@
-# Sports Attendance System
+# Sports Attendance System/Sportix
 
 Django + Bootstrap web app for Christ University Sports Department attendance, scheduling, role management, feedback, and reports.
 
