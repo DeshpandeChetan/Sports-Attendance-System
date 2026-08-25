@@ -6,7 +6,7 @@
     <p class="eyebrow">Attendance</p>
     <h1>{{ session.title|default:"Practice session" }}</h1>
     <p class="text-muted mb-0">
-      {{ session.start_at|date:"d M Y" }} | {{ session.get_schedule_slot_display }} | {{ session.team.sport.name }} | {{ session.team.get_gender_display }} {{ session.team.name }} | {{ session.venue }}
+      {{ session.date_range_display }} | {{ session.time_range_display }} | {{ session.get_schedule_slot_display }} | {{ session.team.sport.name }} | {{ session.team.get_gender_display }} {{ session.team.name }} | {{ session.venue }}
     </p>
     <p class="text-muted mb-0">
       Started by {{ session.attendance_started_by|default:"-" }}{% if session.attendance_started_by_role %} ({{ session.attendance_started_by_role }}){% endif %}
@@ -33,7 +33,8 @@
 <section class="panel mb-4">
   <div class="detail-list">
     <div><span>Practice Session</span><strong>{{ session.title|default:"Practice session" }}</strong></div>
-    <div><span>Date</span><strong>{{ session.start_at|date:"d M Y" }}</strong></div>
+    <div><span>Date</span><strong>{{ session.date_range_display }}</strong></div>
+    <div><span>Time</span><strong>{{ session.time_range_display }}</strong></div>
     <div><span>Schedule</span><strong>{{ session.get_schedule_slot_display }}</strong></div>
     <div><span>Sport</span><strong>{{ session.team.sport.name }}</strong></div>
     <div><span>Team</span><strong>{{ session.team.get_gender_display }} {{ session.team.name }}</strong></div>

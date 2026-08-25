@@ -13,7 +13,7 @@
   <div class="section-title"><h2>User List</h2><span class="small text-muted">Deleted / deactivated users</span></div>
   <div class="table-responsive">
     <table class="table align-middle data-table">
-      <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Mobile</th><th>Status</th><th class="text-end">Actions</th></tr></thead>
+      <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Mobile</th><th>Status</th><th>Reason / Note</th><th class="text-end">Actions</th></tr></thead>
       <tbody>
         {% for item in inactive_users %}
           <tr>
@@ -28,6 +28,7 @@
                 <span class="badge text-bg-secondary">Deactivated</span>
               {% endif %}
             </td>
+            <td>{{ item.profile.account_status_note|default:"-" }}</td>
             <td class="text-end">
               <div class="d-flex justify-content-end gap-2">
                 <form method="post" action="{% url 'restore_user' item.pk %}">
@@ -39,7 +40,7 @@
             </td>
           </tr>
         {% empty %}
-          <tr><td colspan="6" class="empty-state">No deleted or deactivated users.</td></tr>
+          <tr><td colspan="7" class="empty-state">No deleted or deactivated users.</td></tr>
         {% endfor %}
       </tbody>
     </table>

@@ -19,7 +19,7 @@ from .models import (
 
 @admin.register(UserProfile)
 class UserProfileAdmin(admin.ModelAdmin):
-    list_display = ("user", "role", "school", "department", "phone")
+    list_display = ("user", "role", "school", "department", "phone", "account_status")
     list_filter = ("role",)
     search_fields = ("user__username", "user__email", "user__first_name", "user__last_name")
 
@@ -61,7 +61,7 @@ class MembershipAdmin(admin.ModelAdmin):
 
 @admin.register(Session)
 class SessionAdmin(admin.ModelAdmin):
-    list_display = ("title", "team", "start_at", "end_at", "venue", "attendance_submitted", "scheduled_by", "attendance_started_by")
+    list_display = ("title", "team", "start_at", "end_at", "full_day", "venue", "attendance_submitted", "scheduled_by", "attendance_started_by")
     list_filter = ("team__sport", "team__team_type", "attendance_submitted")
     search_fields = ("title", "team__name", "venue")
 

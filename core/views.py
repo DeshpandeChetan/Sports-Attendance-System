@@ -235,6 +235,7 @@ def add_session_permissions(user, sessions):
         item.can_take_for_user = can_take_attendance(user, item)
         item.has_active_attendance_lock = attendance_lock_active(item, now)
         item.sport_icon_class = sport_icon_class(item.team.sport.name)
+        item.scheduled_by_name = user_label(item.scheduled_by) if item.scheduled_by else "-"
     return session_list
 
 
@@ -366,7 +367,7 @@ def notify_practice_session(session, title, message, actor, teams=None, include_
                     ("Sport", team.sport.name),
                     ("Team", f"{team.get_gender_display()} {team.name}"),
                     ("Date", timezone.localtime(session.start_at).strftime("%d %B %Y")),
-                    ("Time / Schedule", f"{timezone.localtime(session.start_at):%I:%M %p} – {timezone.localtime(session.end_at):%I:%M %p} ({session.get_schedule_slot_display()})"),
+                    ("Time / Schedule", session_time_schedule_label(session)),
                     ("Venue", session.venue),
                     ("Scheduled / Updated By", user_label(actor)),
                 ]
@@ -387,14 +388,19 @@ def profile_for_user(user):
     return profile
 
 
-def set_user_account_status(user, status):
+def set_user_account_status(user, status, note=""):
     profile = profile_for_user(user)
     profile.account_status = status
-    profile.save(update_fields=["account_status", "updated_at"])
+    profile.account_status_note = "" if status == UserProfile.AccountStatus.ACTIVE else str(note or "").strip()
+    profile.save(update_fields=["account_status", "account_status_note", "updated_at"])
     should_be_active = status == UserProfile.AccountStatus.ACTIVE
     if user.is_active != should_be_active:
         user.is_active = should_be_active
         user.save(update_fields=["is_active"])
+
+
+def session_time_schedule_label(session):
+    return f"{timezone.localtime(session.start_at):%I:%M %p} - {timezone.localtime(session.end_at):%I:%M %p}{' (Full Day)' if session.full_day else ''} ({session.get_schedule_slot_display()})"
 
 
 def user_account_status(user):
@@ -483,6 +489,22 @@ def truthy_cell(value, default=True):
     return str(value).strip().lower() in {"1", "yes", "y", "true", "active"}
 
 
+def parse_time_cell(value, fallback):
+    if value in (None, ""):
+        return fallback
+    if isinstance(value, datetime):
+        return value.time().replace(second=0, microsecond=0)
+    if isinstance(value, time):
+        return value.replace(second=0, microsecond=0)
+    text = str(value).strip()
+    for fmt in ("%H:%M", "%I:%M %p", "%I:%M%p"):
+        try:
+            return datetime.strptime(text, fmt).time()
+        except ValueError:
+            continue
+    raise ValueError("Times must use HH:MM format.")
+
+
 BULK_UPLOAD_TEMPLATES = {
     "sports": {
         "filename": "sports_bulk_upload_sample.xlsx",
@@ -516,8 +538,8 @@ BULK_UPLOAD_TEMPLATES = {
     },
     "sessions": {
         "filename": "sessions_bulk_upload_sample.xlsx",
-        "headers": ["Team", "Title", "Start Date", "End Date", "Schedule", "Venue", "Other Venue", "Notes"],
-        "rows": [["Basketball - Male Men's Team A", "Morning Tactical Drill", "2026-07-20", "2026-07-20", "Morning", "Indoor Stadium", "", "Fitness and drills"]],
+        "headers": ["Team", "Title", "Start Date", "End Date", "From Time", "To Time", "Schedule", "Full Day", "Venue", "Other Venue", "Notes"],
+        "rows": [["Basketball - Male Men's Team A", "Morning Tactical Drill", "2026-07-20", "2026-07-20", "06:30", "08:30", "Morning", "No", "Indoor Stadium", "", "Fitness and drills"]],
     },
 }
 
@@ -1135,18 +1157,32 @@ def import_sessions_from_file(uploaded_file, user):
             errors.append(f"Row {index}: Dates must use YYYY-MM-DD format.")
             continue
         slot = slot_map.get(str(row.get("schedule") or "Morning").strip().lower(), Session.ScheduleSlot.MORNING)
-        start_clock = time(6, 30) if slot == Session.ScheduleSlot.MORNING else time(16, 0)
-        end_clock = time(8, 30) if slot == Session.ScheduleSlot.MORNING else time(18, 0)
+        default_start_clock = time(6, 30) if slot == Session.ScheduleSlot.MORNING else time(16, 0)
+        default_end_clock = time(8, 30) if slot == Session.ScheduleSlot.MORNING else time(18, 0)
+        try:
+            start_clock = parse_time_cell(row.get("from_time"), default_start_clock)
+            end_clock = parse_time_cell(row.get("to_time"), default_end_clock)
+        except ValueError as exc:
+            errors.append(f"Row {index}: {exc}")
+            continue
+        if end_date < start_date:
+            errors.append(f"Row {index}: End Date cannot be before Start Date.")
+            continue
+        if start_date == end_date and end_clock <= start_clock:
+            errors.append(f"Row {index}: To Time must be after From Time.")
+            continue
         venue = str(row.get("venue") or "").strip()
         other_venue = str(row.get("other_venue") or "").strip()
         if venue.lower() == "other" and other_venue:
             venue = f"Other - {other_venue}"
+        full_day = truthy_cell(row.get("full_day"), False)
         session = Session.objects.create(
             team=team,
             title=str(row.get("title") or "Practice session").strip() or "Practice session",
             start_at=timezone.make_aware(datetime.combine(start_date, start_clock)),
             end_at=timezone.make_aware(datetime.combine(end_date, end_clock)),
             schedule_slot=slot,
+            full_day=full_day,
             venue=venue,
             notes=str(row.get("notes") or "").strip(),
             scheduled_by=user,
@@ -1161,7 +1197,7 @@ def import_sessions_from_file(uploaded_file, user):
             team=team,
             session=session,
             email_type="practice_scheduled",
-            email_context={"details": [("Sport", team.sport.name), ("Team", f"{team.get_gender_display()} {team.name}"), ("Date", timezone.localtime(session.start_at).strftime("%d %B %Y")), ("Time / Schedule", f"{timezone.localtime(session.start_at):%I:%M %p} – {timezone.localtime(session.end_at):%I:%M %p} ({session.get_schedule_slot_display()})"), ("Venue", session.venue), ("Scheduled By", user_label(user))]},
+            email_context={"details": [("Sport", team.sport.name), ("Team", f"{team.get_gender_display()} {team.name}"), ("Date", session.date_range_display), ("Time / Schedule", session_time_schedule_label(session)), ("Venue", session.venue), ("Scheduled By", user_label(user))]},
         )
         created += 1
     return created, errors
@@ -1597,6 +1633,7 @@ def members_list(request):
 
         membership_id = request.POST.get("membership_id")
         membership = get_object_or_404(Membership, pk=membership_id) if membership_id else None
+        status_reason = (request.POST.get("status_reason") or "").strip()
         if membership and not can_manage_student_membership(request.user, membership):
             messages.error(request, "You cannot manage students from this team.")
             return redirect("members")
@@ -1706,12 +1743,12 @@ def members_list(request):
         elif action == "deactivate" and existing_user and role_for(request.user) in TRAINER_ROLES:
             memberships_to_deactivate = list(Membership.objects.filter(user=existing_user, team__in=allowed_teams, is_active=True).select_related("team", "team__sport"))
             Membership.objects.filter(user=existing_user, team__in=allowed_teams).update(is_active=False)
-            set_user_account_status(existing_user, UserProfile.AccountStatus.DEACTIVATED)
+            set_user_account_status(existing_user, UserProfile.AccountStatus.DEACTIVATED, status_reason)
             for changed_membership in memberships_to_deactivate:
                 notify_team_membership_change(request.user, [existing_user], changed_membership.team, "deactivated")
             messages.success(request, "Student deactivated for your assigned team(s).")
         elif action == "deactivate" and existing_user and is_admin_user(request.user):
-            set_user_account_status(existing_user, UserProfile.AccountStatus.DEACTIVATED)
+            set_user_account_status(existing_user, UserProfile.AccountStatus.DEACTIVATED, status_reason)
             messages.success(request, "Student deactivated.")
         elif action == "activate" and membership:
             membership.is_active = True
@@ -1736,13 +1773,13 @@ def members_list(request):
             messages.success(request, "Member assignment deleted.")
         elif action == "delete" and existing_user and role_for(request.user) in TRAINER_ROLES:
             memberships_to_delete = list(Membership.objects.filter(user=existing_user, team__in=allowed_teams).select_related("team", "team__sport"))
-            set_user_account_status(existing_user, UserProfile.AccountStatus.DELETED)
+            set_user_account_status(existing_user, UserProfile.AccountStatus.DELETED, status_reason)
             for changed_membership in memberships_to_delete:
                 notify_team_membership_change(request.user, [existing_user], changed_membership.team, "removed")
             messages.success(request, "Student removed from your assigned team(s).")
         elif action == "delete" and existing_user and is_admin_user(request.user):
             student_name = existing_user.get_full_name() or existing_user.email or existing_user.username
-            set_user_account_status(existing_user, UserProfile.AccountStatus.DELETED)
+            set_user_account_status(existing_user, UserProfile.AccountStatus.DELETED, status_reason)
             messages.success(request, f"{student_name} moved to settings restore list.")
         return redirect("members")
 
@@ -1882,6 +1919,7 @@ def trainers_list(request):
         action = request.POST.get("action")
         trainer_id = request.POST.get("trainer_id")
         trainer = get_object_or_404(User, pk=trainer_id) if trainer_id else None
+        status_reason = (request.POST.get("status_reason") or "").strip()
         if action in {"create", "update"}:
             full_name = request.POST.get("trainer_name", "").strip()
             email = request.POST.get("trainer_email", "").strip().lower()
@@ -1946,14 +1984,14 @@ def trainers_list(request):
             except ValueError as exc:
                 messages.error(request, str(exc))
         elif action == "deactivate" and trainer:
-            set_user_account_status(trainer, UserProfile.AccountStatus.DEACTIVATED)
+            set_user_account_status(trainer, UserProfile.AccountStatus.DEACTIVATED, status_reason)
             messages.success(request, "Trainer deactivated.")
         elif action == "activate" and trainer:
             set_user_account_status(trainer, UserProfile.AccountStatus.ACTIVE)
             messages.success(request, "Trainer activated.")
         elif action == "delete" and trainer:
             trainer_name = trainer.get_full_name() or trainer.username
-            set_user_account_status(trainer, UserProfile.AccountStatus.DELETED)
+            set_user_account_status(trainer, UserProfile.AccountStatus.DELETED, status_reason)
             messages.success(request, f"{trainer_name} moved to settings restore list.")
         return redirect("trainers")
 
@@ -2022,6 +2060,7 @@ def deactivated_users(request):
 def restore_user(request, pk):
     user = get_object_or_404(User, pk=pk)
     set_user_account_status(user, UserProfile.AccountStatus.ACTIVE)
+    Membership.objects.filter(user=user).update(is_active=True)
     messages.success(request, f"{user.get_full_name() or user.email or user.username} restored.")
     return redirect("deactivated_users")
 
@@ -2141,7 +2180,7 @@ def sessions_list(request):
                 messages.error(request, str(exc))
         elif action in {"create", "update"}:
             original_team = session.team if session else None
-            original_schedule = (session.start_at, session.end_at, session.schedule_slot, session.team_id) if session else None
+            original_schedule = (session.start_at, session.end_at, session.schedule_slot, session.full_day, session.team_id) if session else None
             form = SessionForm(request.POST, instance=session)
             if not is_admin_user(request.user):
                 form.fields["team"].queryset = Team.objects.filter(coordinator=request.user)
@@ -2160,7 +2199,7 @@ def sessions_list(request):
                             email_type="practice_scheduled",
                         )
                     else:
-                        updated_schedule = (obj.start_at, obj.end_at, obj.schedule_slot, obj.team_id)
+                        updated_schedule = (obj.start_at, obj.end_at, obj.schedule_slot, obj.full_day, obj.team_id)
                         event_title = "Practice session rescheduled" if original_schedule != updated_schedule else "Practice session updated"
                         impacted_teams = [obj.team]
                         if original_team and original_team.pk != obj.team_id:
@@ -2487,7 +2526,7 @@ def session_form(request, pk=None):
         messages.error(request, "You cannot edit this session.")
         return redirect("sessions")
     original_team = session.team if session else None
-    original_schedule = (session.start_at, session.end_at, session.schedule_slot, session.team_id) if session else None
+    original_schedule = (session.start_at, session.end_at, session.schedule_slot, session.full_day, session.team_id) if session else None
     form = SessionForm(request.POST or None, instance=session)
     if not is_admin_user(request.user):
         form.fields["team"].queryset = Team.objects.filter(coordinator=request.user)
@@ -2508,7 +2547,7 @@ def session_form(request, pk=None):
                 email_type="practice_scheduled",
             )
         else:
-            updated_schedule = (obj.start_at, obj.end_at, obj.schedule_slot, obj.team_id)
+            updated_schedule = (obj.start_at, obj.end_at, obj.schedule_slot, obj.full_day, obj.team_id)
             event_title = "Practice session rescheduled" if original_schedule != updated_schedule else "Practice session updated"
             impacted_teams = [obj.team]
             if original_team and original_team.pk != obj.team_id:

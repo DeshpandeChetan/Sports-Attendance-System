@@ -39,6 +39,7 @@ class UserProfile(TimeStampedModel):
     gender = models.CharField(max_length=30, blank=True)
     profile_image = models.ImageField(upload_to="profile_images/", blank=True, null=True)
     account_status = models.CharField(max_length=20, choices=AccountStatus.choices, default=AccountStatus.ACTIVE)
+    account_status_note = models.TextField(blank=True)
 
     def __str__(self):
         return f"{self.user.get_full_name() or self.user.username} ({self.get_role_display()})"
@@ -154,6 +155,7 @@ class Session(TimeStampedModel):
     venue = models.CharField(max_length=160)
     schedule_slot = models.CharField(max_length=20, choices=ScheduleSlot.choices, default=ScheduleSlot.MORNING)
     notes = models.TextField(blank=True)
+    full_day = models.BooleanField(default=False)
     scheduled_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name="scheduled_sessions")
     attendance_submitted = models.BooleanField(default=False)
     submitted_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="submitted_sessions")
@@ -170,6 +172,21 @@ class Session(TimeStampedModel):
 
     def __str__(self):
         return f"{self.title} - {self.team} ({self.start_at:%d %b %Y})"
+
+    @property
+    def date_range_display(self):
+        start = timezone.localtime(self.start_at)
+        end = timezone.localtime(self.end_at)
+        if start.date() == end.date():
+            return start.strftime("%d %b %Y")
+        return f"{start:%d %b %Y} - {end:%d %b %Y}"
+
+    @property
+    def time_range_display(self):
+        start = timezone.localtime(self.start_at)
+        end = timezone.localtime(self.end_at)
+        label = f"{start:%I:%M %p} - {end:%I:%M %p}"
+        return f"{label} (Full Day)" if self.full_day else label
 
 
 class AttendanceDelegate(TimeStampedModel):

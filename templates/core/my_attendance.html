@@ -13,12 +13,12 @@
       <tbody>
         {% for record in records %}
           <tr>
-            <td>{{ record.session.start_at|date:"d M Y" }}</td>
+            <td>{{ record.session.date_range_display }}</td>
             <td>{{ record.session.team.sport.name }} - {{ record.session.team.get_gender_display }} {{ record.session.team.name }}</td>
             <td>{{ record.session.title|default:"Practice session" }}</td>
             <td>{% include "partials/attendance_badge.html" with status=record.status label=record.get_status_display %}</td>
             <td class="text-end">
-              <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#attendanceViewModal" data-date="{{ record.session.start_at|date:'d M Y' }}" data-schedule="{{ record.session.get_schedule_slot_display }}" data-sport="{{ record.session.team.sport.name }}" data-team="{{ record.session.team.get_gender_display }} {{ record.session.team.name }}" data-session="{{ record.session.title|default:'Practice session' }}" data-venue="{{ record.session.venue }}" data-status="{{ record.get_status_display }}" data-marked-by="{{ record.marked_by|default:'-' }}" data-marked-at="{{ record.marked_at|date:'d M Y, h:i A' }}" data-remarks="{{ record.remarks|default:'-' }}"><i class="bi bi-eye"></i> View</button>
+              <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#attendanceViewModal" data-date="{{ record.session.date_range_display }}" data-schedule="{{ record.session.get_schedule_slot_display }} · {{ record.session.time_range_display }}" data-sport="{{ record.session.team.sport.name }}" data-team="{{ record.session.team.get_gender_display }} {{ record.session.team.name }}" data-session="{{ record.session.title|default:'Practice session' }}" data-venue="{{ record.session.venue }}" data-status="{{ record.get_status_display }}" data-marked-by="{{ record.marked_by|default:'-' }}" data-marked-at="{{ record.marked_at|date:'d M Y, h:i A' }}" data-remarks="{{ record.remarks|default:'-' }}"><i class="bi bi-eye"></i> View</button>
             </td>
           </tr>
         {% empty %}

@@ -163,7 +163,11 @@
       <input type="hidden" name="action" data-field="confirm-action">
       <input type="hidden" name="trainer_id" data-field="confirm-id">
       <div class="modal-header"><h5 class="modal-title">Confirm</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-      <div class="modal-body"><p class="mb-0" data-field="confirm-message"></p></div>
+      <div class="modal-body">
+        <p class="mb-3" data-field="confirm-message"></p>
+        <label class="form-label">Reason / Note</label>
+        <textarea class="form-control" name="status_reason" data-field="confirm-reason" rows="3" placeholder="Enter reason or note"></textarea>
+      </div>
       <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button><button class="btn btn-danger" type="submit">Confirm</button></div>
     </form>
   </div>
@@ -229,6 +233,7 @@
     modal.querySelector('[data-field="confirm-action"]').value = b.dataset.action;
     modal.querySelector('[data-field="confirm-id"]').value = b.dataset.id;
     modal.querySelector('[data-field="confirm-message"]').textContent = b.dataset.message;
+    modal.querySelector('[data-field="confirm-reason"]').value = '';
   });
 </script>
 {% endblock %}

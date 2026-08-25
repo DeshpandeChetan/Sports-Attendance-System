@@ -224,12 +224,14 @@ class ProfileForm(BootstrapFormMixin, forms.ModelForm):
 class SessionForm(BootstrapFormMixin, forms.ModelForm):
     start_date = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}))
     end_date = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}))
+    from_time = forms.TimeField(widget=forms.TimeInput(attrs={"type": "time"}), required=True)
+    to_time = forms.TimeField(widget=forms.TimeInput(attrs={"type": "time"}), required=True)
     venue_choice = forms.ChoiceField(choices=(), required=True)
     other_venue = forms.CharField(max_length=160, required=False)
 
     class Meta:
         model = Session
-        fields = ["team", "title", "schedule_slot", "notes"]
+        fields = ["team", "title", "schedule_slot", "full_day", "notes"]
         widgets = {"notes": forms.Textarea(attrs={"rows": 3})}
 
     def __init__(self, *args, **kwargs):
@@ -240,6 +242,8 @@ class SessionForm(BootstrapFormMixin, forms.ModelForm):
         if self.instance and self.instance.pk:
             self.fields["start_date"].initial = timezone.localtime(self.instance.start_at).date()
             self.fields["end_date"].initial = timezone.localtime(self.instance.end_at).date()
+            self.fields["from_time"].initial = timezone.localtime(self.instance.start_at).time().replace(second=0, microsecond=0)
+            self.fields["to_time"].initial = timezone.localtime(self.instance.end_at).time().replace(second=0, microsecond=0)
             self.fields["venue_choice"].initial = self.instance.venue
             if self.instance.venue.startswith("Other - "):
                 self.fields["venue_choice"].initial = "OTHER"
@@ -249,17 +253,18 @@ class SessionForm(BootstrapFormMixin, forms.ModelForm):
         cleaned = super().clean()
         start_date = cleaned.get("start_date")
         end_date = cleaned.get("end_date")
+        from_time = cleaned.get("from_time")
+        to_time = cleaned.get("to_time")
         if start_date and end_date and end_date < start_date:
             self.add_error("end_date", "End date cannot be before start date.")
+        if start_date and end_date and from_time and to_time and start_date == end_date and to_time <= from_time:
+            self.add_error("to_time", "To Time must be after From Time.")
         return cleaned
 
     def save(self, commit=True):
         session = super().save(commit=False)
-        slot = self.cleaned_data["schedule_slot"]
-        start_clock = time(6, 30) if slot == Session.ScheduleSlot.MORNING else time(16, 0)
-        end_clock = time(8, 30) if slot == Session.ScheduleSlot.MORNING else time(18, 0)
-        session.start_at = timezone.make_aware(datetime.combine(self.cleaned_data["start_date"], start_clock))
-        session.end_at = timezone.make_aware(datetime.combine(self.cleaned_data["end_date"], end_clock))
+        session.start_at = timezone.make_aware(datetime.combine(self.cleaned_data["start_date"], self.cleaned_data["from_time"]))
+        session.end_at = timezone.make_aware(datetime.combine(self.cleaned_data["end_date"], self.cleaned_data["to_time"]))
         session.title = self.cleaned_data.get("title") or "Practice session"
         if self.cleaned_data["venue_choice"] == "OTHER":
             session.venue = f"Other - {self.cleaned_data['other_venue']}" if self.cleaned_data.get("other_venue") else "Other"
