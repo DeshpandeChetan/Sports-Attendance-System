@@ -19,7 +19,13 @@
         <tr>
           <td><strong>{{ member.get_full_name|default:member.username }}</strong><div class="text-muted small">{{ member.email }}</div></td>
           <td>
-            <select class="form-select" name="status_{{ member.pk }}">
+            <div class="attendance-status-picker" data-attendance-status-picker>
+              <button class="attendance-status-option alert alert-success is-selected" type="button" data-status-value="PRESENT" data-alert-class="alert-success">Present</button>
+              <button class="attendance-status-option alert alert-light" type="button" data-status-value="ABSENT" data-alert-class="alert-danger">Absent</button>
+              <button class="attendance-status-option alert alert-light" type="button" data-status-value="LATE" data-alert-class="alert-warning">Late</button>
+              <button class="attendance-status-option alert alert-light" type="button" data-status-value="EARLY_EXIT" data-alert-class="alert-secondary">Early Exit</button>
+            </div>
+            <select class="visually-hidden" name="status_{{ member.pk }}" aria-label="Attendance status">
               <option value="">Select Status</option>
               {% for value,label in statuses %}<option value="{{ value }}" {% if value == "PRESENT" %}selected{% endif %}>{{ label }}</option>{% endfor %}
             </select>
@@ -31,4 +37,41 @@
     <button class="btn btn-primary" type="submit">Submit Attendance</button>
   </section>
 </form>
+<script>
+  function syncAttendanceStatusPicker(picker) {
+    const select = picker?.parentElement?.querySelector('select[name], select[data-sync-name]');
+    const buttons = Array.from(picker.querySelectorAll('[data-status-value]'));
+    const value = select?.value || '';
+    buttons.forEach(button => {
+      const isSelected = button.dataset.statusValue === value;
+      button.classList.toggle('is-selected', isSelected);
+      ['alert-success', 'alert-danger', 'alert-warning', 'alert-secondary', 'alert-light'].forEach(className => {
+        button.classList.remove(className);
+      });
+      button.classList.add(isSelected ? button.dataset.alertClass : 'alert-light');
+    });
+  }
+
+  document.addEventListener('click', event => {
+    const button = event.target.closest('[data-attendance-status-picker] [data-status-value]');
+    if (!button) return;
+    const picker = button.closest('[data-attendance-status-picker]');
+    const select = picker?.parentElement?.querySelector('select[name], select[data-sync-name]');
+    if (!select) return;
+    select.value = select.value === button.dataset.statusValue ? '' : button.dataset.statusValue;
+    select.dispatchEvent(new Event('input', { bubbles: true }));
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    syncAttendanceStatusPicker(picker);
+  });
+
+  document.addEventListener('change', event => {
+    const select = event.target.closest('select[name^="status_"], select[data-sync-name^="status_"]');
+    const picker = select?.parentElement?.querySelector('[data-attendance-status-picker]');
+    if (picker) syncAttendanceStatusPicker(picker);
+  });
+
+  document.querySelectorAll('[data-attendance-status-picker]').forEach(picker => {
+    syncAttendanceStatusPicker(picker);
+  });
+</script>
 {% endblock %}

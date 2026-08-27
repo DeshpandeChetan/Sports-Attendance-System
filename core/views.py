@@ -2726,7 +2726,10 @@ def take_attendance(request, pk):
 @login_required
 def attendance_detail(request, pk, export_type=None):
     session = get_object_or_404(visible_sessions(request.user), pk=pk)
-    records = session.attendance_records.select_related("member", "marked_by")
+    records = list(session.attendance_records.select_related("member", "marked_by"))
+    session.submitted_by_display = session.submitted_by.get_full_name() if session.submitted_by and session.submitted_by.get_full_name() else "Name not set"
+    for record in records:
+        record.marked_by_display = record.marked_by.get_full_name() if record.marked_by and record.marked_by.get_full_name() else "Name not set"
     if export_type == "excel":
         return export_excel(records)
     if export_type == "pdf":

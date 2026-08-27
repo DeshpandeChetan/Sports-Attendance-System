@@ -44,6 +44,12 @@ def breadcrumbs(request):
             {"label": "Feedback", "url_name": "feedback"},
             {"label": labels.get(url_name, "Page")},
         ]}
+    if url_name in {"take_attendance", "attendance_detail"}:
+        return {"breadcrumb_items": [
+            {"label": "Dashboard", "url_name": "dashboard"},
+            {"label": "Practice Sessions", "url_name": "sessions"},
+            {"label": labels.get(url_name, "Page")},
+        ]}
     return {"breadcrumb_items": [{"label": "Dashboard", "url_name": "dashboard"}, {"label": labels.get(url_name, "Page")}]}
 
 

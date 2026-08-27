@@ -9,11 +9,7 @@
       {{ session.date_range_display }} | {{ session.time_range_display }} | {{ session.get_schedule_slot_display }} | {{ session.team.sport.name }} | {{ session.team.get_gender_display }} {{ session.team.name }} | {{ session.venue }}
     </p>
     <p class="text-muted mb-0">
-      Started by {{ session.attendance_started_by|default:"-" }}{% if session.attendance_started_by_role %} ({{ session.attendance_started_by_role }}){% endif %}
-      at {{ session.attendance_started_at|date:"d M Y, h:i A" }}
-    </p>
-    <p class="text-muted mb-0">
-      Submitted by {{ session.submitted_by|default:"-" }}{% if session.submitted_by_role %} ({{ session.submitted_by_role }}){% endif %}
+      Submitted by {% if session.submitted_by %}{{ session.submitted_by_display }}{% else %}-{% endif %}{% if session.submitted_by_role %} ({{ session.submitted_by_role }}){% endif %}
       at {{ session.submitted_at|date:"d M Y, h:i A" }}
     </p>
   </div>
@@ -46,7 +42,7 @@
   <div class="table-responsive"><table class="table align-middle data-table">
     <thead><tr><th>Member</th><th>Status</th><th>Marked By</th><th>Remarks</th><th class="no-print"></th></tr></thead>
     <tbody>{% for record in records %}
-      <tr><td><strong>{{ record.member.get_full_name|default:record.member.username }}</strong></td><td>{% include "partials/attendance_badge.html" with status=record.status label=record.get_status_display %}</td><td>{{ record.marked_by|default:"-" }}</td><td>{{ record.remarks }}</td><td class="text-end no-print">{% if user.is_superuser or user.profile.role == 'SUPER_ADMIN' or user.profile.role == 'SUB_ADMIN' %}<a class="btn btn-sm btn-outline-primary" href="{% url 'edit_attendance' record.pk %}">Edit</a>{% endif %}</td></tr>
+      <tr><td><strong>{{ record.member.get_full_name|default:record.member.username }}</strong></td><td>{% include "partials/attendance_badge.html" with status=record.status label=record.get_status_display %}</td><td>{% if record.marked_by %}{{ record.marked_by_display }}{% else %}-{% endif %}</td><td>{{ record.remarks }}</td><td class="text-end no-print">{% if user.is_superuser or user.profile.role == 'SUPER_ADMIN' or user.profile.role == 'SUB_ADMIN' %}<a class="btn btn-sm btn-outline-primary" href="{% url 'edit_attendance' record.pk %}">Edit</a>{% endif %}</td></tr>
     {% empty %}<tr><td colspan="5" class="text-muted">No attendance records.</td></tr>{% endfor %}</tbody>
   </table></div>
 </section>

@@ -1403,6 +1403,56 @@ body.modal-open {
   font-size: .86rem;
 }
 
+.table .attendance-status-picker,
+.mobile-data-card .attendance-status-picker {
+  display: grid;
+  gap: .45rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  max-width: 620px;
+}
+
+.table .attendance-status-picker > button.attendance-status-option,
+.mobile-data-card .attendance-status-picker > button.attendance-status-option {
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  align-items: center;
+  border-radius: .5rem !important;
+  border-style: solid !important;
+  border-width: 1px !important;
+  box-shadow: none !important;
+  cursor: pointer;
+  display: inline-flex;
+  font-family: inherit;
+  font-size: .78rem;
+  font-weight: 800;
+  justify-content: center;
+  line-height: 1.2;
+  min-height: 38px;
+  padding: .48rem .55rem !important;
+  text-align: center;
+  transition: background-color .16s ease, border-color .16s ease, box-shadow .16s ease, color .16s ease, opacity .16s ease, transform .16s ease;
+  width: 100%;
+}
+
+.table .attendance-status-picker > button.attendance-status-option:not(.is-selected),
+.mobile-data-card .attendance-status-picker > button.attendance-status-option:not(.is-selected) {
+  opacity: .68;
+}
+
+.table .attendance-status-picker > button.attendance-status-option:hover,
+.table .attendance-status-picker > button.attendance-status-option:focus,
+.mobile-data-card .attendance-status-picker > button.attendance-status-option:hover,
+.mobile-data-card .attendance-status-picker > button.attendance-status-option:focus {
+  box-shadow: 0 10px 22px rgba(0, 51, 102, .12) !important;
+  opacity: 1;
+}
+
+.table .attendance-status-picker > button.attendance-status-option.is-selected,
+.mobile-data-card .attendance-status-picker > button.attendance-status-option.is-selected {
+  opacity: 1;
+  transform: translateY(-1px);
+}
+
 .soft-badge {
   background: rgba(127, 179, 213, .34);
   color: var(--primary);
@@ -1858,6 +1908,17 @@ body.modal-open {
 
   .mobile-data-card .dropdown-menu {
     width: 100%;
+  }
+
+  .mobile-data-card .mobile-card-field:has(.attendance-status-picker) strong {
+    display: block;
+    font-size: inherit;
+    font-weight: inherit;
+  }
+
+  .mobile-data-card .attendance-status-picker {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    max-width: none;
   }
 }
 
