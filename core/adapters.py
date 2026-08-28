@@ -18,8 +18,20 @@ def is_allowed_google_email(email, allowed_domains):
 
 class ChristGoogleAccountAdapter(DefaultSocialAccountAdapter):
     def _email_details(self, sociallogin):
-        email = (sociallogin.user.email or "").strip().lower()
-        full_name = " ".join(part for part in [sociallogin.user.first_name, sociallogin.user.last_name] if part).strip()
+        email = (getattr(sociallogin.user, "email", "") or "").strip().lower()
+        if not email and getattr(sociallogin, "account", None):
+            email = (sociallogin.account.extra_data.get("email", "") or "").strip().lower()
+        if not email:
+            for address in getattr(sociallogin, "email_addresses", []) or []:
+                candidate = (getattr(address, "email", "") or "").strip().lower()
+                if candidate:
+                    email = candidate
+                    break
+        first_name = getattr(sociallogin.user, "first_name", "") or ""
+        last_name = getattr(sociallogin.user, "last_name", "") or ""
+        full_name = " ".join(part for part in [first_name, last_name] if part).strip()
+        if not full_name and getattr(sociallogin, "account", None):
+            full_name = (sociallogin.account.extra_data.get("name", "") or "").strip()
         return email, full_name
 
     def _validate_university_email(self, request, email):
@@ -46,7 +58,7 @@ class ChristGoogleAccountAdapter(DefaultSocialAccountAdapter):
             exception,
             extra_context,
         )
-        messages.error(request, INVALID_CHRIST_EMAIL_MESSAGE)
+        messages.error(request, "Google login could not be completed. Please try again.")
         raise ImmediateHttpResponse(redirect("login"))
 
     def is_open_for_signup(self, request, sociallogin):
