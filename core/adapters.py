@@ -1,12 +1,15 @@
+import logging
+
+from allauth.core.exceptions import ImmediateHttpResponse
+from allauth.socialaccount.adapter import DefaultSocialAccountAdapter
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.shortcuts import redirect
 
-from allauth.core.exceptions import ImmediateHttpResponse
-from allauth.socialaccount.adapter import DefaultSocialAccountAdapter
-
 from .email_validation import INVALID_CHRIST_EMAIL_MESSAGE, is_allowed_christ_email
 from .models import LoginAccessRequest, UserProfile
+
+logger = logging.getLogger(__name__)
 
 
 def is_allowed_google_email(email, allowed_domains):
@@ -34,6 +37,17 @@ class ChristGoogleAccountAdapter(DefaultSocialAccountAdapter):
         if user and not sociallogin.is_existing:
             sociallogin.connect(request, user)
             sociallogin.user = user
+
+    def on_authentication_error(self, request, provider, error=None, exception=None, extra_context=None):
+        logger.warning(
+            "Google OAuth authentication error. provider=%s error=%s exception=%s extra_context=%s",
+            getattr(provider, "id", provider),
+            error,
+            exception,
+            extra_context,
+        )
+        messages.error(request, INVALID_CHRIST_EMAIL_MESSAGE)
+        raise ImmediateHttpResponse(redirect("login"))
 
     def is_open_for_signup(self, request, sociallogin):
         email, full_name = self._email_details(sociallogin)
