@@ -18,12 +18,12 @@ class Command(BaseCommand):
         )
         parser.add_argument(
             "--site-domain",
-            default="127.0.0.1:8000",
+            default=getattr(settings, "SITE_DOMAIN", "127.0.0.1:8000"),
             help="Site domain to attach to the Google SocialApp.",
         )
         parser.add_argument(
             "--site-name",
-            default="Sports Attendance System",
+            default=getattr(settings, "SITE_NAME", "Sportix"),
             help="Site display name.",
         )
 

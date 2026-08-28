@@ -23,6 +23,14 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / '.env', override=False)
 
 
+def env_bool(name, default=False):
+    return os.getenv(name, str(default)).lower() in {'1', 'true', 'yes', 'on'}
+
+
+def env_list(name, default=''):
+    return [item.strip() for item in os.getenv(name, default).split(',') if item.strip()]
+
+
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
@@ -30,9 +38,12 @@ load_dotenv(BASE_DIR / '.env', override=False)
 SECRET_KEY = 'django-insecure-xz16%vjed@rb_b0w5g4nr42y6)0wm-c7afc8-4_jyrjz4l-z28'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = env_bool('DEBUG', False)
 
-ALLOWED_HOSTS = ["127.0.0.1", "localhost", "testserver"]
+ALLOWED_HOSTS = env_list(
+    'ALLOWED_HOSTS',
+    '127.0.0.1,localhost,testserver,sportix.christuniversity.in',
+)
 
 
 # Application definition
@@ -138,9 +149,18 @@ MEDIA_URL = 'media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
 SITE_ID = 1
+SITE_DOMAIN = os.getenv('SITE_DOMAIN', '127.0.0.1:8000')
+SITE_NAME = os.getenv('SITE_NAME', 'Sportix')
 LOGIN_REDIRECT_URL = 'dashboard'
 LOGOUT_REDIRECT_URL = 'login'
 LOGIN_URL = 'login'
+CSRF_TRUSTED_ORIGINS = env_list(
+    'CSRF_TRUSTED_ORIGINS',
+    'https://sportix.christuniversity.in',
+)
+USE_X_FORWARDED_HOST = env_bool('USE_X_FORWARDED_HOST', True)
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+ACCOUNT_DEFAULT_HTTP_PROTOCOL = os.getenv('ACCOUNT_DEFAULT_HTTP_PROTOCOL', 'https' if not DEBUG else 'http')
 
 AUTHENTICATION_BACKENDS = [
     'django.contrib.auth.backends.ModelBackend',
@@ -191,6 +211,7 @@ LOGGING = {
     'loggers': {
         'core.email_notifications': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
         'core.email_worker': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
+        'core.adapters': {'handlers': ['console'], 'level': 'WARNING', 'propagate': False},
         'core.management.commands.runserver': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
     },
 }
